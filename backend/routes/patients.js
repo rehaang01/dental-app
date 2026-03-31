@@ -1,0 +1,123 @@
+const express = require('express');
+const router = express.Router();
+const prisma = require('../lib/prisma');
+
+// Generate patient code like DEN-0001
+async function generatePatientCode() {
+  const count = await prisma.patient.count();
+  return `DEN-${String(count + 1).padStart(4, '0')}`;
+}
+
+// POST /api/patients — create new patient
+router.post('/', async (req, res) => {
+  try {
+    const {
+      name, gender, age, dob, address,
+      assignedDoctor, contactNumbers, remarks
+    } = req.body;
+
+    const patientCode = await generatePatientCode();
+
+    const patient = await prisma.patient.create({
+      data: {
+        patientCode,
+        name, gender, age: parseInt(age), dob: new Date(dob),
+        address, assignedDoctor,
+        contactNumbers: contactNumbers || [],
+        remarks,
+        treatmentPlan: { create: {} },
+        billing: { create: { estimatedTotal: 0, totalPaid: 0, balanceDue: 0 } }
+      },
+      include: { treatmentPlan: true, billing: true }
+    });
+
+    res.json(patient);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/patients — list all patients (with search)
+router.get('/', async (req, res) => {
+  try {
+    const { search } = req.query;
+    const patients = await prisma.patient.findMany({
+      where: search ? {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { patientCode: { contains: search, mode: 'insensitive' } },
+          { contactNumbers: { has: search } }
+        ]
+      } : undefined,
+      include: { billing: true },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(patients);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/patients/:id — single patient with everything
+router.get('/:id', async (req, res) => {
+  try {
+    const patient = await prisma.patient.findUnique({
+      where: { id: req.params.id },
+      include: {
+        treatmentPlan: { include: { history: { orderBy: { changedAt: 'desc' } } } },
+        billing: { include: { history: { orderBy: { changedAt: 'desc' } } } },
+        visits: { orderBy: { visitDate: 'desc' } }
+      }
+    });
+    if (!patient) return res.status(404).json({ error: 'Patient not found' });
+    res.json(patient);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/patients/:id — edit patient details
+router.patch('/:id', async (req, res) => {
+  try {
+    const patient = await prisma.patient.update({
+      where: { id: req.params.id },
+      data: req.body
+    });
+    res.json(patient);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/patients/:id/treatment — update treatment plan
+router.patch('/:id/treatment', async (req, res) => {
+  try {
+    const { upperRight, upperLeft, lowerRight, lowerLeft, general, comment, changedBy } = req.body;
+
+    // Save history snapshot first
+    const current = await prisma.treatmentPlan.findUnique({ where: { patientId: req.params.id } });
+    await prisma.treatmentHistory.create({
+      data: {
+        treatmentPlanId: current.id,
+        upperRight: current.upperRight,
+        upperLeft: current.upperLeft,
+        lowerRight: current.lowerRight,
+        lowerLeft: current.lowerLeft,
+        general: current.general,
+        comment, changedBy
+      }
+    });
+
+    // Update the plan
+    const updated = await prisma.treatmentPlan.update({
+      where: { patientId: req.params.id },
+      data: { upperRight, upperLeft, lowerRight, lowerLeft, general }
+    });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+module.exports = router;
