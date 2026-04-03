@@ -27,7 +27,7 @@ router.post('/', async (req, res) => {
     let newEstimated = billing.estimatedTotal;
     let newPaid = billing.totalPaid;
 
-    if (delta > 0) newEstimated += delta;     // new charge
+    if (delta > 0) newEstimated += delta;      // new charge
     if (delta < 0) newPaid += Math.abs(delta); // payment received
 
     const newBalance = newEstimated - newPaid;
@@ -60,6 +60,7 @@ router.post('/', async (req, res) => {
       whatsappSent = true;
     } catch (waErr) {
       whatsappError = waErr.message;
+      console.error('⚠️  WhatsApp send failed:', waErr.message); // log to terminal
     }
 
     await prisma.visit.update({
