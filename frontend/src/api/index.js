@@ -11,4 +11,5 @@ export const updatePatient = (id, data) => api.patch(`/patients/${id}`, data);
 export const updateTreatment = (id, data) => api.patch(`/patients/${id}/treatment`, data);
 export const addVisit      = (data) => api.post('/visits', data);
 export const updateBilling = (patientId, data) => api.patch(`/billing/${patientId}`, data);
+export const deletePatient = (id) => api.delete(`/patients/${id}`);
 export const getDashboard  = () => api.get('/dashboard');

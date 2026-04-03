@@ -77,6 +77,34 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/patients/:id — permanently delete patient and all related data
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Must delete in dependency order (no cascade in schema)
+    const treatmentPlan = await prisma.treatmentPlan.findUnique({ where: { patientId: id } });
+    if (treatmentPlan) {
+      await prisma.treatmentHistory.deleteMany({ where: { treatmentPlanId: treatmentPlan.id } });
+      await prisma.treatmentPlan.delete({ where: { patientId: id } });
+    }
+
+    const billing = await prisma.billing.findUnique({ where: { patientId: id } });
+    if (billing) {
+      await prisma.billingHistory.deleteMany({ where: { billingId: billing.id } });
+      await prisma.billing.delete({ where: { patientId: id } });
+    }
+
+    await prisma.visit.deleteMany({ where: { patientId: id } });
+    await prisma.patient.delete({ where: { id } });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // PATCH /api/patients/:id — edit patient details
 router.patch('/:id', async (req, res) => {
   try {

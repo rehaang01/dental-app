@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getPatient, updateTreatment, addVisit, updateBilling, updatePatient } from '../api'
+import { getPatient, updateTreatment, addVisit, updateBilling, updatePatient, deletePatient } from '../api'
 
 // ─── Shared dark-mode-aware class strings ────────────────────────
 const CARD  = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm"
@@ -21,6 +21,7 @@ export default function PatientDetail() {
   const [showTreatmentHistory, setShowTreatmentHistory] = useState(false)
   const [showBillingEdit, setShowBillingEdit]         = useState(false)
   const [showEditPatient, setShowEditPatient]         = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm]     = useState(false)
 
   useEffect(() => { fetchPatient() }, [id])
 
@@ -67,6 +68,10 @@ export default function PatientDetail() {
             {patient.remarks && <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 italic">"{patient.remarks}"</p>}
           </div>
           <div className="flex gap-2">
+            <button onClick={() => setShowDeleteConfirm(true)}
+              className="border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 px-4 py-2.5 rounded-lg font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition text-sm">
+              🗑 Delete
+            </button>
             <button onClick={() => setShowEditPatient(true)}
               className="border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 px-4 py-2.5 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition text-sm">
               Edit Patient
@@ -238,6 +243,7 @@ export default function PatientDetail() {
       )}
 
       {/* ── Modals ── */}
+      {showDeleteConfirm  && <DeleteConfirmModal patient={patient} onClose={() => setShowDeleteConfirm(false)} onDeleted={() => navigate('/')} />}
       {showTreatmentHistory && <TreatmentHistoryModal treatmentPlan={tp} onClose={() => setShowTreatmentHistory(false)} />}
       {showEditPatient    && <EditPatientModal  patient={patient} onClose={() => setShowEditPatient(false)}    onSaved={() => { setShowEditPatient(false);    fetchPatient() }} />}
       {showVisitModal     && <VisitModal        patient={patient} onClose={() => setShowVisitModal(false)}     onSaved={() => { setShowVisitModal(false);     fetchPatient() }} />}
@@ -483,6 +489,78 @@ function TreatmentHistoryModal({ treatmentPlan, onClose }) {
         <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700">
           <button onClick={onClose} className={BTN_CANCEL + ' w-full'}>Close</button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Delete Confirm Modal ─────────────────────────────────────────
+function DeleteConfirmModal({ patient, onClose, onDeleted }) {
+  const [confirming, setConfirming] = useState(false)
+  const [typedName, setTypedName]   = useState('')
+  const [deleting, setDeleting]     = useState(false)
+  const nameMatches = typedName.trim().toLowerCase() === patient.name.trim().toLowerCase()
+
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      await deletePatient(patient.id)
+      onDeleted()
+    } catch (err) {
+      alert('Failed to delete patient: ' + err.message)
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <div className={MODAL_WRAP}>
+      <div className={`${MODAL_BOX} max-w-md p-6`}>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-lg">🗑</div>
+          <div>
+            <h2 className="text-base font-semibold text-gray-800 dark:text-white">Delete Patient</h2>
+            <p className="text-xs text-gray-400 dark:text-gray-500">{patient.patientCode}</p>
+          </div>
+        </div>
+
+        {!confirming ? (
+          <>
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-5">
+              <p className="text-sm font-medium text-red-700 dark:text-red-300 mb-1">This action cannot be undone.</p>
+              <p className="text-xs text-red-500 dark:text-red-400">
+                All data for <span className="font-semibold">{patient.name}</span> will be permanently deleted —
+                visits, billing history, treatment plan, and everything else.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={onClose} className={BTN_CANCEL}>Cancel</button>
+              <button onClick={() => setConfirming(true)}
+                className="flex-1 bg-red-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-red-700 transition">
+                Continue →
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              Type <span className="font-semibold text-gray-800 dark:text-white">{patient.name}</span> to confirm deletion:
+            </p>
+            <input
+              className={`${FIELD} mb-4`}
+              placeholder={patient.name}
+              value={typedName}
+              onChange={e => setTypedName(e.target.value)}
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <button onClick={onClose} className={BTN_CANCEL}>Cancel</button>
+              <button onClick={handleDelete} disabled={!nameMatches || deleting}
+                className="flex-1 bg-red-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-red-700 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                {deleting ? 'Deleting…' : 'Delete Permanently'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { getPatients, getDashboard } from '../api'
+import { getPatients, getDashboard, deletePatient } from '../api'
 
 const SORT_OPTIONS = [
   { key: 'patientCode', label: 'ID' },
   { key: 'name',        label: 'Name' },
   { key: 'assignedDoctor', label: 'Doctor' },
   { key: 'balance',     label: 'Balance' },
+  { key: 'createdAt',   label: 'Registered' },
 ]
 
 export default function PatientList() {
@@ -17,6 +18,7 @@ export default function PatientList() {
   const [statsLoading, setStatsLoading] = useState(true)
   const [sortKey, setSortKey]           = useState('patientCode')
   const [sortDir, setSortDir]           = useState('asc')
+  const [deleteTarget, setDeleteTarget] = useState(null) // patient to delete
 
   useEffect(() => { fetchStats() }, [])
   useEffect(() => { fetchPatients() }, [search])
@@ -46,6 +48,11 @@ export default function PatientList() {
       if (sortKey === 'balance') {
         av = a.billing?.balanceDue ?? 0
         bv = b.billing?.balanceDue ?? 0
+        return sortDir === 'asc' ? av - bv : bv - av
+      }
+      if (sortKey === 'createdAt') {
+        av = new Date(a.createdAt).getTime()
+        bv = new Date(b.createdAt).getTime()
         return sortDir === 'asc' ? av - bv : bv - av
       }
       av = (a[sortKey] || '').toString().toLowerCase()
@@ -148,6 +155,7 @@ export default function PatientList() {
                     { key: 'assignedDoctor', label: 'Doctor' },
                     { key: null,          label: 'Contact' },
                     { key: 'balance',     label: 'Balance' },
+                    { key: 'createdAt',   label: 'Registered' },
                   ].map(col => (
                     <th key={col.label}
                       className={`text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide select-none ${
@@ -193,17 +201,108 @@ export default function PatientList() {
                         </span>
                       )}
                     </td>
+                    <td className="px-5 py-3.5 text-gray-400 dark:text-gray-500 text-xs whitespace-nowrap">
+                      {p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                    </td>
                     <td className="px-5 py-3.5 text-right">
-                      <Link to={`/patients/${p.id}`}
-                        className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 dark:hover:text-white transition-all">
-                        Open <span className="text-[10px]">→</span>
-                      </Link>
+                      <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => setDeleteTarget(p)}
+                          className="inline-flex items-center text-xs font-medium px-2.5 py-1.5 rounded-lg text-red-400 dark:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-all"
+                          title="Delete patient">
+                          🗑
+                        </button>
+                        <Link to={`/patients/${p.id}`}
+                          className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 dark:hover:text-white transition-all">
+                          Open <span className="text-[10px]">→</span>
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+        )}
+      </div>
+
+      {deleteTarget && (
+        <DeleteConfirmModal
+          patient={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={() => { setDeleteTarget(null); fetchPatients(); fetchStats() }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Delete Confirm Modal ─────────────────────────────────────────
+function DeleteConfirmModal({ patient, onClose, onDeleted }) {
+  const [confirming, setConfirming] = useState(false)
+  const [typedName, setTypedName]   = useState('')
+  const [deleting, setDeleting]     = useState(false)
+  const nameMatches = typedName.trim().toLowerCase() === patient.name.trim().toLowerCase()
+
+  async function handleDelete() {
+    setDeleting(true)
+    try { await deletePatient(patient.id); onDeleted() }
+    catch (err) { alert('Failed to delete: ' + err.message); setDeleting(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-lg">🗑</div>
+          <div>
+            <h2 className="text-base font-semibold text-gray-800 dark:text-white">Delete Patient</h2>
+            <p className="text-xs text-gray-400 dark:text-gray-500">{patient.patientCode}</p>
+          </div>
+        </div>
+
+        {!confirming ? (
+          <>
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-5">
+              <p className="text-sm font-medium text-red-700 dark:text-red-300 mb-1">This action cannot be undone.</p>
+              <p className="text-xs text-red-500 dark:text-red-400">
+                All data for <span className="font-semibold">{patient.name}</span> will be permanently deleted —
+                visits, billing, treatment plan, and everything else.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={onClose}
+                className="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2.5 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                Cancel
+              </button>
+              <button onClick={() => setConfirming(true)}
+                className="flex-1 bg-red-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-red-700 transition">
+                Continue →
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+              Type <span className="font-semibold text-gray-800 dark:text-white">{patient.name}</span> to confirm:
+            </p>
+            <input
+              className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 w-full text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500 mb-4"
+              placeholder={patient.name}
+              value={typedName}
+              onChange={e => setTypedName(e.target.value)}
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <button onClick={onClose}
+                className="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2.5 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                Cancel
+              </button>
+              <button onClick={handleDelete} disabled={!nameMatches || deleting}
+                className="flex-1 bg-red-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-red-700 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                {deleting ? 'Deleting…' : 'Delete Permanently'}
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>
