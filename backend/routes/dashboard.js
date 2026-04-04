@@ -65,4 +65,50 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/dashboard/detail?type=todayVisits|dues|drVanita|drRajneesh
+router.get('/detail', async (req, res) => {
+  const { type } = req.query;
+  try {
+    let patients = [];
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfToday   = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+    if (type === 'todayVisits') {
+      // distinct patients who had a visit today
+      const visits = await prisma.visit.findMany({
+        where: { visitDate: { gte: startOfToday, lt: endOfToday } },
+        include: { patient: { include: { billing: true } } },
+        orderBy: { visitDate: 'desc' },
+      });
+      const seen = new Set();
+      patients = visits.reduce((acc, v) => {
+        if (!seen.has(v.patientId)) { seen.add(v.patientId); acc.push(v.patient); }
+        return acc;
+      }, []);
+    } else if (type === 'dues') {
+      patients = await prisma.patient.findMany({
+        where: { billing: { balanceDue: { gt: 0 } } },
+        include: { billing: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    } else if (type === 'drVanita') {
+      patients = await prisma.patient.findMany({
+        where: { assignedDoctor: 'Vanita Goenka', isActive: true },
+        include: { billing: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    } else if (type === 'drRajneesh') {
+      patients = await prisma.patient.findMany({
+        where: { assignedDoctor: 'Rajneesh Goenka', isActive: true },
+        include: { billing: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+    res.json(patients);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

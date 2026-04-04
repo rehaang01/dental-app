@@ -42,12 +42,25 @@ router.post('/', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const { search } = req.query;
+    // Find IDs of patients whose contactNumbers array contains a partial match
+    let contactMatchIds = [];
+    if (search) {
+      const rawMatches = await prisma.$queryRaw`
+        SELECT id FROM "Patient"
+        WHERE EXISTS (
+          SELECT 1 FROM unnest("contactNumbers") AS num
+          WHERE num ILIKE ${'%' + search + '%'}
+        )
+      `;
+      contactMatchIds = rawMatches.map(r => r.id);
+    }
+
     const patients = await prisma.patient.findMany({
       where: search ? {
         OR: [
           { name: { contains: search, mode: 'insensitive' } },
           { patientCode: { contains: search, mode: 'insensitive' } },
-          { contactNumbers: { has: search } }
+          ...(contactMatchIds.length ? [{ id: { in: contactMatchIds } }] : [])
         ]
       } : undefined,
       include: { billing: true },

@@ -6,6 +6,17 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─── Auth ────────────────────────────────────────────────────────
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  displayName  String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ─── Patients ────────────────────────────────────────────────────
 model Patient {
   id               String   @id @default(cuid())
   patientCode      String   @unique // e.g. DEN-0001

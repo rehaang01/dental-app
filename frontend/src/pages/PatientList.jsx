@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Link } from 'react-router-dom'
-import { getPatients, getDashboard, deletePatient } from '../api'
+import { Link, useNavigate } from 'react-router-dom'
+import { getPatients, getDashboard, getDashboardDetail, deletePatient } from '../api'
 
 const SORT_OPTIONS = [
   { key: 'patientCode', label: 'ID' },
@@ -11,6 +11,7 @@ const SORT_OPTIONS = [
 ]
 
 export default function PatientList() {
+  const navigate = useNavigate()
   const [patients, setPatients]         = useState([])
   const [stats, setStats]               = useState(null)
   const [search, setSearch]             = useState('')
@@ -18,7 +19,8 @@ export default function PatientList() {
   const [statsLoading, setStatsLoading] = useState(true)
   const [sortKey, setSortKey]           = useState('patientCode')
   const [sortDir, setSortDir]           = useState('asc')
-  const [deleteTarget, setDeleteTarget] = useState(null) // patient to delete
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [detailModal, setDetailModal]   = useState(null) // { type, title }
 
   useEffect(() => { fetchStats() }, [])
   useEffect(() => { fetchPatients() }, [search])
@@ -80,15 +82,19 @@ export default function PatientList() {
         <StatCard loading={statsLoading} icon="🗓️" label="Today's Visits"
           value={stats?.todayVisits ?? '—'}
           trend={stats?.todayVisits > 0 ? `${stats.todayVisits} patient${stats.todayVisits !== 1 ? 's' : ''} seen` : 'No visits yet'}
-          accent="blue" />
+          accent="blue"
+          onClick={() => setDetailModal({ type: 'todayVisits', title: "Today's Visits" })} />
         <StatCard loading={statsLoading} icon="💳" label="Outstanding Dues"
           value={stats ? `₹${Number(stats.totalDues).toLocaleString('en-IN')}` : '—'}
           trend={stats?.totalDues > 0 ? 'Pending collection' : 'All clear ✓'}
-          accent={stats?.totalDues > 0 ? 'red' : 'green'} />
+          accent={stats?.totalDues > 0 ? 'red' : 'green'}
+          onClick={() => stats?.totalDues > 0 && setDetailModal({ type: 'dues', title: 'Outstanding Dues' })} />
         <StatCard loading={statsLoading} icon="👩‍⚕️" label="Dr. Vanita"
-          value={stats?.drVanitaCount ?? '—'} trend="Active patients" accent="violet" />
+          value={stats?.drVanitaCount ?? '—'} trend="Active patients" accent="violet"
+          onClick={() => setDetailModal({ type: 'drVanita', title: 'Dr. Vanita — Active Patients' })} />
         <StatCard loading={statsLoading} icon="👨‍⚕️" label="Dr. Rajneesh"
-          value={stats?.drRajneeshCount ?? '—'} trend="Active patients" accent="violet" />
+          value={stats?.drRajneeshCount ?? '—'} trend="Active patients" accent="violet"
+          onClick={() => setDetailModal({ type: 'drRajneesh', title: 'Dr. Rajneesh — Active Patients' })} />
       </div>
 
       {/* ── Recent Visits ── */}
@@ -232,6 +238,15 @@ export default function PatientList() {
           onDeleted={() => { setDeleteTarget(null); fetchPatients(); fetchStats() }}
         />
       )}
+
+      {detailModal && (
+        <DashboardDetailModal
+          type={detailModal.type}
+          title={detailModal.title}
+          onClose={() => setDetailModal(null)}
+          onNavigate={(id) => { setDetailModal(null); navigate(`/patients/${id}`) }}
+        />
+      )}
     </div>
   )
 }
@@ -317,10 +332,13 @@ const accents = {
   violet: { bg: 'bg-violet-50 dark:bg-violet-900/20', border: 'border-violet-100 dark:border-violet-800/40', val: 'text-violet-700 dark:text-violet-400', sub: 'text-violet-500/70 dark:text-violet-400/60', dot: 'bg-violet-400' },
 }
 
-function StatCard({ icon, label, value, trend, accent = 'blue', loading }) {
+function StatCard({ icon, label, value, trend, accent = 'blue', loading, onClick }) {
   const a = accents[accent] || accents.blue
   return (
-    <div className={`${a.bg} border ${a.border} rounded-2xl p-5 flex flex-col gap-3`}>
+    <div
+      className={`${a.bg} border ${a.border} rounded-2xl p-5 flex flex-col gap-3 ${onClick ? 'cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all' : ''}`}
+      onClick={onClick}
+    >
       <div className="flex items-center justify-between">
         <span className="text-2xl">{icon}</span>
         <span className={`w-2 h-2 rounded-full ${a.dot}`} />
@@ -333,6 +351,77 @@ function StatCard({ icon, label, value, trend, accent = 'blue', loading }) {
       <div>
         <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">{label}</p>
         {trend && <p className={`text-xs mt-0.5 ${a.sub}`}>{trend}</p>}
+        {onClick && <p className={`text-xs mt-1 ${a.sub} opacity-70`}>Click to view →</p>}
+      </div>
+    </div>
+  )
+}
+
+// ─── Dashboard Detail Modal ───────────────────────────────────────
+function DashboardDetailModal({ type, title, onClose, onNavigate }) {
+  const [patients, setPatients] = useState([])
+  const [loading, setLoading]   = useState(true)
+
+  useEffect(() => {
+    getDashboardDetail(type)
+      .then(res => setPatients(res.data))
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [type])
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+          <h2 className="text-base font-semibold text-gray-800 dark:text-white">{title}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none">✕</button>
+        </div>
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-4 py-3">
+          {loading ? (
+            <div className="space-y-2 py-2">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-14 bg-gray-100 dark:bg-gray-700 rounded-xl animate-pulse" />
+              ))}
+            </div>
+          ) : patients.length === 0 ? (
+            <div className="text-center py-12 text-gray-400 dark:text-gray-500">
+              <p className="text-4xl mb-2">🦷</p>
+              <p className="text-sm">No patients to show.</p>
+            </div>
+          ) : (
+            <div className="space-y-2 py-1">
+              {patients.map(p => (
+                <button key={p.id} onClick={() => onNavigate(p.id)}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-200 border border-transparent transition text-left group">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded-md">
+                      {p.patientCode}
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{p.name}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">Dr. {p.assignedDoctor}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {p.billing?.balanceDue > 0 && (
+                      <span className="text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-md">
+                        ₹{p.billing.balanceDue.toLocaleString('en-IN')}
+                      </span>
+                    )}
+                    <span className="text-gray-300 dark:text-gray-600 text-sm">→</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="px-6 py-3 border-t border-gray-100 dark:border-gray-700">
+          <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
+            {!loading && `${patients.length} patient${patients.length !== 1 ? 's' : ''}`}
+          </p>
+        </div>
       </div>
     </div>
   )
