@@ -49,7 +49,7 @@ router.post('/login', async (req, res) => {
     res.cookie('token', token, {
       httpOnly: true,
       secure:   process.env.NODE_ENV === 'production', // HTTPS only in production
-      sameSite: 'strict',   // Blocks cross-site requests (CSRF protection)
+      sameSite: 'none',   // Blocks cross-site requests (CSRF protection)
       maxAge:   COOKIE_MAX_AGE,
       path:     '/',
     });
