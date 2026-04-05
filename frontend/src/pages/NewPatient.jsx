@@ -74,14 +74,14 @@ function PhoneInput({ value, onChange, placeholder, error, onBlur }) {
   return (
     <div>
       <div className="flex gap-2">
-        <select value={dialCode} onChange={handleDial} className={selectCls}>
+        <select value={dialCode} onChange={handleDial} className={selectCls + ' max-w-[140px] min-w-0 shrink-0'}>
           {COUNTRY_CODES.map(c => (
             <option key={c.code + c.dial} value={c.dial}>{c.name} ({c.dial})</option>
           ))}
         </select>
         <input
           type="tel"
-          className={inputCls}
+          className={inputCls + ' min-w-0'}
           placeholder={dialCode === '+' ? 'e.g. +1234567890' : placeholder || 'Phone number'}
           value={dialCode === '+' ? (value || '') : localPart}
           onChange={handleNumber}
@@ -170,7 +170,7 @@ export default function NewPatient() {
       </div>
 
       <form onSubmit={handleSubmit}
-        className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 space-y-4">
+        className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6 space-y-4 overflow-hidden">
 
         <div className="grid grid-cols-2 gap-4">
           <div>

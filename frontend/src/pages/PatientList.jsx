@@ -104,7 +104,7 @@ export default function PatientList() {
           <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
             {stats.recentVisits.map(v => (
               <Link key={v.id} to={`/patients/${v.patient.id}`}
-                className="flex-shrink-0 min-w-[200px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3.5 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all group">
+                className="flex-shrink-0 w-[200px] max-w-[200px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3.5 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all group overflow-hidden">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-mono font-semibold text-blue-500 dark:text-blue-400">{v.patient.patientCode}</span>
                   <span className="text-xs text-gray-400 dark:text-gray-500">
@@ -116,7 +116,7 @@ export default function PatientList() {
                 </p>
                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Dr. {v.doctor}</p>
                 {v.treatmentDoneToday && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 truncate border-t border-gray-100 dark:border-gray-700 pt-2">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 border-t border-gray-100 dark:border-gray-700 pt-2 line-clamp-2 break-words">
                     {v.treatmentDoneToday}
                   </p>
                 )}

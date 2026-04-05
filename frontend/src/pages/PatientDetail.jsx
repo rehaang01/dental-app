@@ -287,14 +287,19 @@ export default function PatientDetail() {
           ) : (
             patient.visits?.map((v, i) => (
               <div key={i} className={`${CARD} p-5`}>
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <span className="font-medium text-gray-800 dark:text-white">
-                      {new Date(v.visitDate).toLocaleDateString('en-IN', { dateStyle: 'long' })}{' '}<span className="ml-1 text-xs text-gray-400 dark:text-gray-500">{new Date(v.visitDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+                <div className="mb-3">
+                  {/* Date + doctor row */}
+                  <div className="flex items-baseline gap-2 flex-wrap mb-2">
+                    <span className="font-medium text-gray-800 dark:text-white text-sm">
+                      {new Date(v.visitDate).toLocaleDateString('en-IN', { dateStyle: 'long' })}
                     </span>
-                    <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">{v.changedBy || ('Dr. ' + v.doctor)}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                      {new Date(v.visitDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{v.changedBy || ('Dr. ' + v.doctor)}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  {/* Action badges row — wraps on mobile */}
+                  <div className="flex flex-wrap items-center gap-2">
                     {v.paymentDelta !== 0 && (
                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                         v.paymentDelta > 0
@@ -330,13 +335,13 @@ export default function PatientDetail() {
                 {v.treatmentDoneToday && (
                   <div className="mb-2">
                     <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5">Treatment done</p>
-                    <p className="text-sm text-gray-700 dark:text-gray-200">{v.treatmentDoneToday}</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-200 break-words">{v.treatmentDoneToday}</p>
                   </div>
                 )}
                 {v.medicinesInstructions && (
                   <div>
                     <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5">Instructions / Medicines</p>
-                    <p className="text-sm text-gray-700 dark:text-gray-200">{v.medicinesInstructions}</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-200 break-words">{v.medicinesInstructions}</p>
                   </div>
                 )}
               </div>
