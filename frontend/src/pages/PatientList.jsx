@@ -128,7 +128,7 @@ export default function PatientList() {
 
       {/* ── Patient Table ── */}
       <div>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
           <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-widest">
             All Patients
             {!loading && <span className="ml-2 normal-case font-normal text-gray-400 dark:text-gray-500">({patients.length})</span>}
@@ -136,7 +136,7 @@ export default function PatientList() {
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 text-sm">🔍</span>
             <input type="text" placeholder="Search name, ID or phone…"
-              className="pl-9 pr-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 w-64 transition"
+              className="pl-9 pr-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64 transition"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
         </div>
@@ -152,7 +152,8 @@ export default function PatientList() {
           </div>
         ) : (
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[600px]">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-gray-700">
                   {[
@@ -228,6 +229,7 @@ export default function PatientList() {
               </tbody>
             </table>
           </div>
+            </div>
         )}
       </div>
 

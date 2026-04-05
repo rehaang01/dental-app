@@ -46,9 +46,9 @@ export default function App() {
       {/* All protected routes */}
       <Route path="*" element={
         <PrivateRoute>
-          <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
+          <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200 overflow-x-hidden">
             <Navbar />
-            <main className="max-w-5xl mx-auto px-4 py-8">
+            <main className="max-w-5xl mx-auto px-4 py-6 pb-16">
               <Routes>
                 <Route path="/"             element={<PatientList />} />
                 <Route path="/patients/new" element={<NewPatient />} />

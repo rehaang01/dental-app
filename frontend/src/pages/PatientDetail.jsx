@@ -95,10 +95,13 @@ export default function PatientDetail() {
       </button>
 
       {/* ── Header card ── */}
-      <div className={`${CARD} p-6 mb-6`}>
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
+      <div className={`${CARD} p-4 sm:p-6 mb-6`}>
+        {/* Desktop: side by side | Mobile: stacked */}
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+
+          {/* Patient info */}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
               <span className="font-mono text-blue-600 dark:text-blue-400 text-sm font-semibold">{patient.patientCode}</span>
               <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded-full">
                 Dr. {patient.assignedDoctor}
@@ -111,12 +114,12 @@ export default function PatientDetail() {
                 {patient.isActive ? '● Treatment Ongoing' : '✓ Treatment Completed'}
               </span>
             </div>
-            <h1 className="text-2xl font-semibold text-gray-800 dark:text-white">{patient.name}</h1>
+            <h1 className="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-white">{patient.name}</h1>
             <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
               {patient.gender} · {patient.age} yrs · {new Date(patient.dob).toLocaleDateString('en-IN')}
             </p>
             <p className="text-gray-500 dark:text-gray-400 text-sm">{patient.address}</p>
-            <div className="flex gap-2 mt-2">
+            <div className="flex flex-wrap gap-2 mt-2">
               {patient.contactNumbers.map((n, i) => (
                 <span key={i} className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full">{n}</span>
               ))}
@@ -128,7 +131,9 @@ export default function PatientDetail() {
               </div>
             )}
           </div>
-          <div className="flex gap-2">
+
+          {/* Action buttons — row on desktop, wrapping row on mobile */}
+          <div className="flex flex-wrap sm:flex-nowrap gap-2 shrink-0">
             <button
               onClick={async () => {
                 try {
@@ -136,7 +141,7 @@ export default function PatientDetail() {
                   fetchPatient()
                 } catch (err) { showToast('Error: ' + err.message, 'error') }
               }}
-              className={`px-4 py-2.5 rounded-lg font-medium text-sm transition border ${
+              className={`px-3 py-2 rounded-lg font-medium text-sm transition border ${
                 patient.isActive
                   ? 'border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
                   : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
@@ -145,18 +150,19 @@ export default function PatientDetail() {
               {patient.isActive ? '🟢 Ongoing' : '✅ Completed'}
             </button>
             <button onClick={() => setShowDeleteConfirm(true)}
-              className="border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 px-4 py-2.5 rounded-lg font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition text-sm">
+              className="border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 px-3 py-2 rounded-lg font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition text-sm">
               🗑 Delete
             </button>
             <button onClick={() => setShowEditPatient(true)}
-              className="border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 px-4 py-2.5 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition text-sm">
+              className="border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 px-3 py-2 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition text-sm">
               Edit Patient
             </button>
             <button onClick={() => setShowVisitModal(true)}
-              className="bg-blue-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-blue-700 transition text-sm">
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition text-sm">
               + Add Visit
             </button>
           </div>
+
         </div>
 
         {/* Billing summary bar */}
@@ -179,10 +185,10 @@ export default function PatientDetail() {
       </div>
 
       {/* ── Tabs ── */}
-      <div className="flex gap-1 mb-4 bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 p-1 rounded-lg w-fit">
+      <div className="flex gap-1 mb-4 bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 p-1 rounded-lg w-full sm:w-fit">
         {['overview', 'history'].map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium capitalize transition ${
+            className={`flex-1 sm:flex-none px-4 py-1.5 rounded-md text-sm font-medium capitalize transition text-center ${
               activeTab === tab
                 ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-800 dark:text-white'
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
@@ -194,7 +200,7 @@ export default function PatientDetail() {
 
       {/* ── Overview tab ── */}
       {activeTab === 'overview' && (
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Treatment Plan */}
           <div className={`${CARD} p-5`}>
             <div className="flex items-center justify-between mb-4">
