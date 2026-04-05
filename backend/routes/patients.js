@@ -135,6 +135,20 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/patients/treatment-history/:historyId — delete one history snapshot
+// ⚠️  MUST be defined BEFORE router.delete('/:id') so Express matches the
+//    specific path first. If it comes after, Express treats "treatment-history"
+//    as the patient :id and returns 404 "Patient not found" every time.
+router.delete('/treatment-history/:historyId', async (req, res) => {
+  try {
+    await prisma.treatmentHistory.delete({ where: { id: req.params.historyId } });
+    res.json({ success: true });
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'History entry not found.' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE /api/patients/:id — permanently delete patient and all related data
 // ✅ FIX: schema.prisma now has onDelete: Cascade on all relations so
 //    Prisma handles child-record cleanup automatically. This route just
@@ -243,15 +257,6 @@ router.patch('/:id/treatment', async (req, res) => {
   }
 });
 
-// DELETE /api/patients/treatment-history/:historyId — delete one history snapshot
-router.delete('/treatment-history/:historyId', async (req, res) => {
-  try {
-    await prisma.treatmentHistory.delete({ where: { id: req.params.historyId } });
-    res.json({ success: true });
-  } catch (err) {
-    if (err.code === 'P2025') return res.status(404).json({ error: 'History entry not found.' });
-    res.status(500).json({ error: err.message });
-  }
-});
+
 
 module.exports = router;

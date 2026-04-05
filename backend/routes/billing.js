@@ -2,6 +2,19 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../lib/prisma');
 
+// DELETE /api/billing/history/:historyId — delete one billing history entry
+// ⚠️  MUST be defined BEFORE router.patch('/:patientId') — specific routes
+//    must always come before wildcard routes in Express.
+router.delete('/history/:historyId', async (req, res) => {
+  try {
+    await prisma.billingHistory.delete({ where: { id: req.params.historyId } });
+    res.json({ success: true });
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'History entry not found.' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // PATCH /api/billing/:patientId — manual billing update
 router.patch('/:patientId', async (req, res) => {
   try {
@@ -33,17 +46,6 @@ router.patch('/:patientId', async (req, res) => {
     });
     res.json(updated);
   } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// DELETE /api/billing/history/:historyId — delete one billing history entry
-router.delete('/history/:historyId', async (req, res) => {
-  try {
-    await prisma.billingHistory.delete({ where: { id: req.params.historyId } });
-    res.json({ success: true });
-  } catch (err) {
-    if (err.code === 'P2025') return res.status(404).json({ error: 'History entry not found.' });
     res.status(500).json({ error: err.message });
   }
 });

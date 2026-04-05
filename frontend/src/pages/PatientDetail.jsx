@@ -209,7 +209,7 @@ export default function PatientDetail() {
                         try { await deleteBillingHistory(h.id); fetchPatient() }
                         catch { alert('Failed to delete entry.') }
                       }}
-                      className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity px-1"
+                      className="text-red-400 hover:text-red-600 transition-colors px-1"
                       title="Delete this entry"
                     >🗑</button>
                   </div>
@@ -520,7 +520,7 @@ function TreatmentHistoryModal({ treatmentPlan, onClose, onDeleted }) {
                           </span>
                           <button
                             onClick={() => handleDeleteEntry(h.id)}
-                            className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity text-xs px-1"
+                            className="text-red-400 hover:text-red-600 transition-colors text-xs px-1"
                             title="Delete this snapshot"
                           >🗑</button>
                         </div>
