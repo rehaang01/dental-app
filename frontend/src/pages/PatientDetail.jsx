@@ -242,17 +242,26 @@ export default function PatientDetail() {
             ) : (
               <div className="space-y-1 max-h-60 overflow-y-auto">
                 {b?.history?.map((h) => (
-                  <div key={h.id} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 text-xs border-b border-gray-100 dark:border-gray-700 py-2 group">
-                    <span className="text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                      {new Date(h.changedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                    </span>
-                    <span className="text-gray-500 dark:text-gray-400 truncate">{h.comment || <span className="italic text-gray-300 dark:text-gray-600">—</span>}</span>
-                    <span className="font-semibold text-gray-700 dark:text-gray-200 whitespace-nowrap">₹{h.newBalance.toFixed(2)}</span>
-                    <button
-                      onClick={() => setBillingDeleteTarget(h.id)}
-                      className="text-red-400 hover:text-red-600 transition-colors px-1"
-                      title="Delete this entry"
-                    >🗑</button>
+                  <div key={h.id} className="flex flex-col gap-0.5 border-b border-gray-100 dark:border-gray-700 py-2 group">
+                    <div className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 text-xs">
+                      <span className="text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                        {new Date(h.changedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {' '}
+                        <span className="text-gray-300 dark:text-gray-600">
+                          {new Date(h.changedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </span>
+                      <span className="text-gray-500 dark:text-gray-400 truncate">{h.comment || <span className="italic text-gray-300 dark:text-gray-600">—</span>}</span>
+                      <span className="font-semibold text-gray-700 dark:text-gray-200 whitespace-nowrap">₹{h.newBalance.toFixed(2)}</span>
+                      <button
+                        onClick={() => setBillingDeleteTarget(h.id)}
+                        className="text-red-400 hover:text-red-600 transition-colors px-1"
+                        title="Delete this entry"
+                      >🗑</button>
+                    </div>
+                    {h.changedBy && (
+                      <span className="text-xs text-blue-500 dark:text-blue-400 pl-0.5">{h.changedBy}</span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -275,9 +284,9 @@ export default function PatientDetail() {
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <span className="font-medium text-gray-800 dark:text-white">
-                      {new Date(v.visitDate).toLocaleDateString('en-IN', { dateStyle: 'long' })}
+                      {new Date(v.visitDate).toLocaleDateString('en-IN', { dateStyle: 'long' })}{' '}<span className="ml-1 text-xs text-gray-400 dark:text-gray-500">{new Date(v.visitDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
                     </span>
-                    <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">Dr. {v.doctor}</span>
+                    <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">{v.changedBy || ('Dr. ' + v.doctor)}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     {v.paymentDelta !== 0 && (
@@ -375,18 +384,52 @@ export default function PatientDetail() {
 // ─── Visit Modal ─────────────────────────────────────────────────
 function VisitModal({ patient, onClose, onSaved, showToast }) {
   const { user } = useAuth()
-  const [form, setForm] = useState({ treatmentDoneToday: '', medicinesInstructions: '', paymentDelta: '', includeDuesReminder: false })
+  const [form, setForm] = useState({
+    treatmentDoneToday: '', medicinesInstructions: '', paymentDelta: '',
+    includeTreatment: true, includeInstructions: true, includeDues: false,
+  })
   const [saving, setSaving]   = useState(false)
   const [waStatus, setWaStatus] = useState(null)
 
-  async function handleSave() {
+  async function handleSave(sendWhatsApp) {
     setSaving(true)
     try {
-      const res = await addVisit({ patientId: patient.id, doctor: patient.assignedDoctor, ...form, changedBy: user?.displayName || patient.assignedDoctor })
-      setWaStatus(res.data.whatsappSent ? 'sent' : res.data.whatsappError || 'not sent')
-      setTimeout(onSaved, 1500)
+      const payload = {
+        patientId: patient.id,
+        doctor: patient.assignedDoctor,
+        changedBy: user?.displayName || patient.assignedDoctor,
+        treatmentDoneToday: form.treatmentDoneToday,
+        medicinesInstructions: form.medicinesInstructions,
+        paymentDelta: form.paymentDelta,
+        sendWhatsApp,
+        includeTreatment: form.includeTreatment,
+        includeInstructions: form.includeInstructions,
+        includeDues: form.includeDues,
+      }
+      const res = await addVisit(payload)
+      if (sendWhatsApp) {
+        setWaStatus(res.data.whatsappSent ? 'sent' : res.data.whatsappError || 'not sent')
+        setTimeout(onSaved, 1500)
+      } else {
+        onSaved()
+      }
     } catch (err) { showToast('Error saving visit: ' + err.message, 'error') }
     setSaving(false)
+  }
+
+  // Toggle row component
+  function Toggle({ label, checked, onChange }) {
+    return (
+      <label className="flex items-center justify-between cursor-pointer select-none py-1">
+        <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
+        <div
+          onClick={onChange}
+          className={`relative w-10 h-5 rounded-full transition-colors ${checked ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+        >
+          <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0.5'}`} />
+        </div>
+      </label>
+    )
   }
 
   return (
@@ -397,6 +440,8 @@ function VisitModal({ patient, onClose, onSaved, showToast }) {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl">✕</button>
         </div>
         <div className="space-y-4">
+
+          {/* Visit fields */}
           <div>
             <label className={LBL}>Treatment done today</label>
             <textarea className={FIELD} rows={3} placeholder="e.g. Root canal on upper left central incisor..."
@@ -413,21 +458,38 @@ function VisitModal({ patient, onClose, onSaved, showToast }) {
               value={form.paymentDelta} onChange={e => setForm({...form, paymentDelta: e.target.value})} />
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Positive = new charge · Negative = payment received</p>
           </div>
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input type="checkbox" checked={form.includeDuesReminder}
-              onChange={e => setForm({...form, includeDuesReminder: e.target.checked})} className="w-4 h-4 accent-blue-600" />
-            <span className="text-sm text-gray-700 dark:text-gray-300">Include dues reminder in WhatsApp message</span>
-          </label>
+
+          {/* WhatsApp message toggles */}
+          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-1">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">📱 WhatsApp message — include:</p>
+            <Toggle label="Treatment done today" checked={form.includeTreatment}
+              onChange={() => setForm({...form, includeTreatment: !form.includeTreatment})} />
+            <Toggle label="Medicines & Instructions" checked={form.includeInstructions}
+              onChange={() => setForm({...form, includeInstructions: !form.includeInstructions})} />
+            <Toggle label="Dues reminder" checked={form.includeDues}
+              onChange={() => setForm({...form, includeDues: !form.includeDues})} />
+          </div>
+
           {waStatus && (
-            <p className={`text-sm ${waStatus === 'sent' ? 'text-green-600 dark:text-green-400' : 'text-orange-500'}`}>
-              {waStatus === 'sent' ? '✓ WhatsApp message sent!' : `WhatsApp: ${waStatus}`}
-            </p>
+            <div className={`text-sm rounded-lg px-3 py-2 ${waStatus === 'sent' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400'}`}>
+              {waStatus === 'sent'
+                ? '✓ WhatsApp message sent!'
+                : waStatus.includes('no contact numbers') || waStatus.includes('Could not send')
+                  ? '⚠️ Visit saved, but WhatsApp failed — patient may not have WhatsApp on their number(s).'
+                  : `⚠️ Visit saved. WhatsApp: ${waStatus}`}
+            </div>
           )}
-          <div className="flex gap-3 pt-2">
-            <button onClick={onClose} className={BTN_CANCEL}>Cancel</button>
-            <button onClick={handleSave} disabled={saving}
-              className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50">
-              {saving ? 'Saving...' : 'Save Visit'}
+
+          {/* Three action buttons */}
+          <div className="flex gap-2 pt-2">
+            <button onClick={onClose} className={BTN_CANCEL} disabled={saving}>Cancel</button>
+            <button onClick={() => handleSave(false)} disabled={saving}
+              className="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition disabled:opacity-50">
+              {saving ? 'Saving…' : '💾 Save only'}
+            </button>
+            <button onClick={() => handleSave(true)} disabled={saving}
+              className="flex-1 bg-green-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-green-700 transition disabled:opacity-50">
+              {saving ? 'Saving…' : '📱 Save + WhatsApp'}
             </button>
           </div>
         </div>
@@ -495,7 +557,8 @@ function TreatmentModal({ patient, onClose, onSaved, showToast }) {
 // ─── Billing Modal ────────────────────────────────────────────────
 function BillingModal({ patient, onClose, onSaved, showToast }) {
   const b = patient.billing
-  const [form, setForm] = useState({ estimatedTotal: b?.estimatedTotal || 0, totalPaid: b?.totalPaid || 0, comment: '', changedBy: patient.assignedDoctor })
+  const { user } = useAuth()
+  const [form, setForm] = useState({ estimatedTotal: b?.estimatedTotal || 0, totalPaid: b?.totalPaid || 0, comment: '', changedBy: user?.displayName || patient.assignedDoctor })
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
@@ -588,9 +651,16 @@ function TreatmentHistoryModal({ treatmentPlan, onClose, onDeleted }) {
                       <span className="text-gray-300 dark:text-gray-600">·</span>
                       <span className="text-xs text-gray-500 dark:text-gray-400">Live plan</span>
                     </div>
-                    <span className="text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-medium">
-                      Active
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {history[0]?.changedBy && (
+                        <span className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full font-medium">
+                          {history[0].changedBy}
+                        </span>
+                      )}
+                      <span className="text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-medium">
+                        Active
+                      </span>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {QUADRANTS.map(([key, label]) => treatmentPlan?.[key] ? (

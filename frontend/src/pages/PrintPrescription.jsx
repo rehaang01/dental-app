@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { getPatient } from '../api'
 
@@ -7,6 +7,7 @@ export default function PrintPrescription() {
   const [patient, setPatient] = useState(null)
   const [visit, setVisit]     = useState(null)
   const [error, setError]     = useState(null)
+  const printFired = useRef(false)   // guard against StrictMode double-fire
 
   useEffect(() => {
     async function load() {
@@ -17,8 +18,11 @@ export default function PrintPrescription() {
         if (!v) { setError('Visit not found.'); return }
         setPatient(p)
         setVisit(v)
-        // Auto-open print dialog once content is ready
-        setTimeout(() => window.print(), 500)
+        // Auto-open print dialog exactly once
+        if (!printFired.current) {
+          printFired.current = true
+          setTimeout(() => window.print(), 500)
+        }
       } catch (err) {
         setError('Could not load patient data.')
       }
@@ -43,6 +47,9 @@ export default function PrintPrescription() {
     day: 'numeric', month: 'long', year: 'numeric'
   })
 
+  // The user who added this visit (logged-in user), fallback to assigned doctor
+  const signatoryName = visit.changedBy || ('Dr. ' + visit.doctor)
+
   // Parse medicines into a list — split on newlines or semicolons
   const medicines = visit.medicinesInstructions
     ? visit.medicinesInstructions
@@ -53,25 +60,30 @@ export default function PrintPrescription() {
 
   return (
     <>
-      {/* ── Screen-only toolbar (hidden on print) ── */}
+      {/* Screen-only toolbar */}
       <div className="no-print bg-gray-100 border-b border-gray-200 px-6 py-3 flex items-center justify-between">
         <span className="text-sm text-gray-500">
           Prescription preview — <span className="font-medium text-gray-700">{patient.name}</span>
         </span>
-        <button
-          onClick={() => window.print()}
-          className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-        >
-          🖨 Print / Save as PDF
-        </button>
+        <div className="flex items-center gap-4">
+          <span className="text-xs text-gray-400 italic">
+            💡 Uncheck <strong>Headers and footers</strong> in the print dialog to hide the URL
+          </span>
+          <button
+            onClick={() => window.print()}
+            className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+          >
+            🖨 Print / Save as PDF
+          </button>
+        </div>
       </div>
 
-      {/* ── Prescription ── */}
+      {/* Prescription */}
       <div className="prescription-page">
 
         {/* Header */}
         <div className="rx-header">
-          <div className="rx-clinic-logo">🦷</div>
+          <img src="/logo.jpg" alt="Clinic Logo" className="rx-clinic-logo-img" />
           <div>
             <h1 className="rx-clinic-name">Goenka's Dental Care Centre</h1>
             <p className="rx-clinic-sub">Vanita &amp; Rajneesh Goenka · Amritsar, Punjab</p>
@@ -130,35 +142,32 @@ export default function PrintPrescription() {
           </div>
         )}
 
-        {/* Spacer to push footer down */}
+        {/* Spacer */}
         <div style={{ flex: 1 }} />
 
-        {/* Signature line */}
+        {/* Signature — logged-in user who added this visit */}
         <div className="rx-signature-row">
           <div />
           <div className="rx-signature-block">
             <div className="rx-signature-line" />
-            <p className="rx-signature-name">Dr. {visit.doctor}</p>
+            <p className="rx-signature-name">{signatoryName}</p>
             <p className="rx-signature-sub">Goenka's Dental Care Centre</p>
           </div>
         </div>
 
         <div className="rx-divider" />
 
-        {/* Footer */}
-        <p className="rx-footer">
-          Goenka's Dental Care Centre · Amritsar, Punjab
-        </p>
+        <p className="rx-footer">Goenka's Dental Care Centre · Amritsar, Punjab</p>
       </div>
 
-      {/* ── All styles ── */}
       <style>{`
-        /* Hide toolbar on print */
         @media print {
           .no-print { display: none !important; }
+          @page {
+            size: A4;
+            margin: 20mm 18mm 8mm 18mm;
+          }
         }
-
-        /* Screen: centre a white card */
         @media screen {
           body { background: #f3f4f6; margin: 0; }
           .prescription-page {
@@ -174,11 +183,8 @@ export default function PrintPrescription() {
             font-family: 'Segoe UI', system-ui, sans-serif;
           }
         }
-
-        /* Print: fill the page */
         @media print {
-          @page { size: A4; margin: 20mm 18mm; }
-          body  { background: white; margin: 0; }
+          body { background: white; margin: 0; }
           .prescription-page {
             padding: 0;
             min-height: unset;
@@ -187,116 +193,25 @@ export default function PrintPrescription() {
             font-family: 'Segoe UI', system-ui, sans-serif;
           }
         }
-
-        /* ── Shared component styles ── */
-        .rx-header {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          margin-bottom: 20px;
-        }
-        .rx-clinic-logo {
-          font-size: 40px;
-          line-height: 1;
-        }
-        .rx-clinic-name {
-          font-size: 22px;
-          font-weight: 700;
-          color: #1e3a5f;
-          margin: 0 0 4px;
-          letter-spacing: -0.3px;
-        }
-        .rx-clinic-sub {
-          font-size: 13px;
-          color: #6b7280;
-          margin: 0;
-        }
-        .rx-divider {
-          border: none;
-          border-top: 1.5px solid #e5e7eb;
-          margin: 16px 0;
-        }
-        .rx-patient-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          gap: 12px 24px;
-          margin-bottom: 4px;
-        }
-        .rx-field-label {
-          display: block;
-          font-size: 10px;
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.6px;
-          color: #9ca3af;
-          margin-bottom: 2px;
-        }
-        .rx-field-value {
-          display: block;
-          font-size: 13.5px;
-          color: #111827;
-          font-weight: 500;
-        }
-        .rx-section {
-          margin: 20px 0;
-        }
-        .rx-section-title {
-          font-size: 12px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.8px;
-          color: #1e3a5f;
-          margin: 0 0 10px;
-          padding-bottom: 4px;
-          border-bottom: 1px solid #e5e7eb;
-        }
-        .rx-body-text {
-          font-size: 14px;
-          color: #374151;
-          line-height: 1.6;
-          margin: 0;
-        }
-        .rx-medicine-list {
-          margin: 0;
-          padding-left: 20px;
-          list-style-type: disc;
-        }
-        .rx-medicine-list li {
-          font-size: 14px;
-          color: #374151;
-          line-height: 1.8;
-        }
-        .rx-signature-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-end;
-          margin: 24px 0 0;
-        }
-        .rx-signature-block {
-          text-align: center;
-          min-width: 200px;
-        }
-        .rx-signature-line {
-          border-top: 1px solid #374151;
-          margin-bottom: 6px;
-        }
-        .rx-signature-name {
-          font-size: 13px;
-          font-weight: 600;
-          color: #111827;
-          margin: 0;
-        }
-        .rx-signature-sub {
-          font-size: 11px;
-          color: #9ca3af;
-          margin: 2px 0 0;
-        }
-        .rx-footer {
-          text-align: center;
-          font-size: 11px;
-          color: #9ca3af;
-          margin: 12px 0 0;
-        }
+        .rx-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+        .rx-clinic-logo-img { width: 56px; height: 56px; object-fit: contain; border-radius: 8px; }
+        .rx-clinic-name { font-size: 22px; font-weight: 700; color: #1e3a5f; margin: 0 0 4px; letter-spacing: -0.3px; }
+        .rx-clinic-sub { font-size: 13px; color: #6b7280; margin: 0; }
+        .rx-divider { border: none; border-top: 1.5px solid #e5e7eb; margin: 16px 0; }
+        .rx-patient-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px 24px; margin-bottom: 4px; }
+        .rx-field-label { display: block; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: #9ca3af; margin-bottom: 2px; }
+        .rx-field-value { display: block; font-size: 13.5px; color: #111827; font-weight: 500; }
+        .rx-section { margin: 20px 0; }
+        .rx-section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #1e3a5f; margin: 0 0 10px; padding-bottom: 4px; border-bottom: 1px solid #e5e7eb; }
+        .rx-body-text { font-size: 14px; color: #374151; line-height: 1.6; margin: 0; }
+        .rx-medicine-list { margin: 0; padding-left: 20px; list-style-type: disc; }
+        .rx-medicine-list li { font-size: 14px; color: #374151; line-height: 1.8; }
+        .rx-signature-row { display: flex; justify-content: space-between; align-items: flex-end; margin: 24px 0 0; }
+        .rx-signature-block { text-align: center; min-width: 200px; }
+        .rx-signature-line { border-top: 1px solid #374151; margin-bottom: 6px; }
+        .rx-signature-name { font-size: 13px; font-weight: 600; color: #111827; margin: 0; }
+        .rx-signature-sub { font-size: 11px; color: #9ca3af; margin: 2px 0 0; }
+        .rx-footer { text-align: center; font-size: 11px; color: #9ca3af; margin: 12px 0 0; }
       `}</style>
     </>
   )

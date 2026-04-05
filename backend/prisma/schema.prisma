@@ -111,6 +111,7 @@ model Visit {
   medicinesInstructions String?
   paymentDelta          Float    @default(0) // positive = charge, negative = payment
   includeDuesReminder   Boolean  @default(false)
+  changedBy             String   @default("") // logged-in user who added this visit
   whatsappSent          Boolean  @default(false)
   whatsappError         String?
   createdAt             DateTime @default(now())
