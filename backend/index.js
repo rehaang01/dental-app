@@ -1,8 +1,8 @@
 require('dotenv').config();
-const express     = require('express');
-const cors        = require('cors');
+const express      = require('express');
+const cors         = require('cors');
 const cookieParser = require('cookie-parser');
-const rateLimit   = require('express-rate-limit');
+const rateLimit    = require('express-rate-limit');
 
 const authRouter      = require('./routes/auth');
 const patientsRouter  = require('./routes/patients');
@@ -33,8 +33,8 @@ const loginLimiter = rateLimit({
 });
 
 // ── Public routes (no auth required) ─────────────────────────────
-app.use('/api/auth/login',  loginLimiter);
-app.use('/api/auth',        authRouter);
+app.use('/api/auth/login', loginLimiter);
+app.use('/api/auth',       authRouter);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -44,10 +44,22 @@ app.use('/api/visits',    requireAuth, visitsRouter);
 app.use('/api/billing',   requireAuth, billingRouter);
 app.use('/api/dashboard', requireAuth, dashboardRouter);
 
-const PORT = process.env.PORT || 3001;
-const { initWhatsApp } = require('./services/whatsapp');
-initWhatsApp();
+// ── WhatsApp — only initialise when explicitly enabled ────────────
+// ✅ FIX: previously initWhatsApp() was called unconditionally, which
+//    forced a QR-code scan on every startup and could crash the server
+//    if the WhatsApp library failed to initialise.
+//
+//    Set ENABLE_WHATSAPP=true in your .env to turn it on.
+//    Leave it unset (or set to anything else) to skip it entirely.
+if (process.env.ENABLE_WHATSAPP === 'true') {
+  const { initWhatsApp } = require('./services/whatsapp');
+  initWhatsApp();
+  console.log('📱 WhatsApp initialising — scan the QR code if prompted.');
+} else {
+  console.log('ℹ️  WhatsApp disabled. Set ENABLE_WHATSAPP=true in .env to enable.');
+}
 
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });

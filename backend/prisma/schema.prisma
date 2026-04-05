@@ -22,11 +22,11 @@ model Patient {
   patientCode      String   @unique // e.g. DEN-0001
   name             String
   gender           String
-  country          String?   @default("India")
+  country          String?  @default("India")
   age              Int
   dob              DateTime
   address          String
-  assignedDoctor   String // "mom" | "dad"
+  assignedDoctor   String
   contactNumbers   String[] // array of phone numbers
   remarks          String?
   isActive         Boolean  @default(true)
@@ -40,9 +40,10 @@ model Patient {
 }
 
 model TreatmentPlan {
-  id         String   @id @default(cuid())
-  patientId  String   @unique
-  patient    Patient  @relation(fields: [patientId], references: [id])
+  id        String   @id @default(cuid())
+  patientId String   @unique
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
   upperRight String?
   upperLeft  String?
   lowerRight String?
@@ -56,21 +57,23 @@ model TreatmentPlan {
 model TreatmentHistory {
   id              String        @id @default(cuid())
   treatmentPlanId String
-  treatmentPlan   TreatmentPlan @relation(fields: [treatmentPlanId], references: [id])
-  upperRight      String?
-  upperLeft       String?
-  lowerRight      String?
-  lowerLeft       String?
-  general         String?
-  comment         String? // like a git commit message
-  changedBy       String // doctor name
-  changedAt       DateTime      @default(now())
+  treatmentPlan   TreatmentPlan @relation(fields: [treatmentPlanId], references: [id], onDelete: Cascade)
+
+  upperRight String?
+  upperLeft  String?
+  lowerRight String?
+  lowerLeft  String?
+  general    String?
+  comment    String?  // like a git commit message
+  changedBy  String   // doctor name
+  changedAt  DateTime @default(now())
 }
 
 model Billing {
-  id             String   @id @default(cuid())
-  patientId      String   @unique
-  patient        Patient  @relation(fields: [patientId], references: [id])
+  id        String  @id @default(cuid())
+  patientId String  @unique
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
   estimatedTotal Float    @default(0)
   totalPaid      Float    @default(0)
   balanceDue     Float    @default(0)
@@ -80,9 +83,10 @@ model Billing {
 }
 
 model BillingHistory {
-  id            String   @id @default(cuid())
-  billingId     String
-  billing       Billing  @relation(fields: [billingId], references: [id])
+  id        String  @id @default(cuid())
+  billingId String
+  billing   Billing @relation(fields: [billingId], references: [id], onDelete: Cascade)
+
   prevEstimated Float
   prevPaid      Float
   prevBalance   Float
@@ -95,9 +99,10 @@ model BillingHistory {
 }
 
 model Visit {
-  id                    String   @id @default(cuid())
-  patientId             String
-  patient               Patient  @relation(fields: [patientId], references: [id])
+  id        String  @id @default(cuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
   visitDate             DateTime @default(now())
   doctor                String
   treatmentDoneToday    String?

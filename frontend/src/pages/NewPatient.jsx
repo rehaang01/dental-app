@@ -107,10 +107,13 @@ export default function NewPatient() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
+      <div className="mb-6">
         <button type="button" onClick={() => navigate('/')}
-          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-lg">
-          ← Back
+          className="inline-flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm transition mb-4">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
+          </svg>
+          Back to patients
         </button>
         <h1 className="text-2xl font-semibold text-gray-800 dark:text-white">New Patient</h1>
       </div>

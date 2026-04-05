@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { login as apiLogin } from '../api'
 import { useAuth } from '../context/AuthContext'
@@ -12,6 +12,21 @@ export default function Login() {
   const [showPass, setShowPass] = useState(false)
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
+  // ✅ FIX: the Navbar (which normally manages dark mode) isn't rendered
+  //    on the login page, so the dark class was never applied here.
+  //    Read the saved preference from localStorage on mount and apply it.
+  const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark')
+
+  useEffect(() => {
+    const root = document.documentElement
+    if (dark) {
+      root.classList.add('dark')
+      localStorage.setItem('theme', 'dark')
+    } else {
+      root.classList.remove('dark')
+      localStorage.setItem('theme', 'light')
+    }
+  }, [dark])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -32,6 +47,16 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center p-4">
+
+      {/* Dark mode toggle — top right corner */}
+      <button
+        onClick={() => setDark(d => !d)}
+        className="fixed top-4 right-4 w-9 h-9 rounded-lg flex items-center justify-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm transition"
+        title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+      >
+        {dark ? '☀️' : '🌙'}
+      </button>
+
       <div className="w-full max-w-sm">
 
         {/* Card */}

@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 
 export default function Navbar() {
   const { user, logout } = useAuth()
   const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark')
   const [showLogout, setShowLogout] = useState(false)
+  const dropdownRef = useRef(null)
 
   useEffect(() => {
     const root = document.documentElement
@@ -17,6 +18,21 @@ export default function Navbar() {
       localStorage.setItem('theme', 'light')
     }
   }, [dark])
+
+  // ✅ FIX: close dropdown when clicking anywhere outside it.
+  // The old backdrop div approach broke because the sticky nav and the
+  // backdrop shared z-index z-40, so the nav intercepted clicks first.
+  useEffect(() => {
+    if (!showLogout) return
+    function handleClickOutside(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowLogout(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showLogout])
+
   async function handleLogout() {
     setShowLogout(false)
     await logout()
@@ -55,7 +71,7 @@ export default function Navbar() {
           </Link>
 
           {/* User avatar / logout */}
-          <div className="relative">
+          <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setShowLogout(s => !s)}
               className="w-9 h-9 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition text-sm font-bold text-gray-600 dark:text-gray-300"
@@ -65,23 +81,18 @@ export default function Navbar() {
             </button>
 
             {showLogout && (
-              <>
-                {/* Click-away backdrop */}
-                <div className="fixed inset-0 z-40" onClick={() => setShowLogout(false)} />
-                {/* Dropdown */}
-                <div className="absolute right-0 top-11 z-50 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl py-1 w-52">
-                  <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-                    <p className="text-xs font-semibold text-gray-800 dark:text-white truncate">{user?.displayName}</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">@{user?.username}</p>
-                  </div>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full text-left px-4 py-2.5 text-sm text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition flex items-center gap-2"
-                  >
-                    <span>🚪</span> Sign out
-                  </button>
+              <div className="absolute right-0 top-11 z-50 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl py-1 w-52">
+                <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                  <p className="text-xs font-semibold text-gray-800 dark:text-white truncate">{user?.displayName}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">@{user?.username}</p>
                 </div>
-              </>
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-left px-4 py-2.5 text-sm text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition flex items-center gap-2"
+                >
+                  <span>🚪</span> Sign out
+                </button>
+              </div>
             )}
           </div>
         </div>

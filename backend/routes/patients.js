@@ -1,40 +1,70 @@
 const express = require('express');
-const router = express.Router();
-const prisma = require('../lib/prisma');
+const router  = express.Router();
+const prisma  = require('../lib/prisma');
 
-// Generate patient code like DEN-0001
+// ── Patient code generation ───────────────────────────────────────
+// ✅ FIX: instead of count()-based codes (which race under concurrent
+//    requests and break when patients are deleted), we read the highest
+//    existing code and increment from there. We then retry up to 5
+//    times if two simultaneous requests collide on the unique constraint.
 async function generatePatientCode() {
-  const count = await prisma.patient.count();
-  return `DEN-${String(count + 1).padStart(4, '0')}`;
+  const last = await prisma.patient.findFirst({
+    orderBy: { patientCode: 'desc' },
+    select:  { patientCode: true },
+  });
+
+  if (!last) return 'DEN-0001';
+
+  // patientCode format is always "DEN-NNNN"
+  const num = parseInt(last.patientCode.split('-')[1], 10);
+  return `DEN-${String(num + 1).padStart(4, '0')}`;
 }
 
 // POST /api/patients — create new patient
 router.post('/', async (req, res) => {
-  try {
-    const {
-      name, gender, age, dob, address,
-      assignedDoctor, contactNumbers, remarks
-    } = req.body;
+  const {
+    name, gender, age, dob, address,
+    assignedDoctor, contactNumbers, remarks
+  } = req.body;
 
-    const patientCode = await generatePatientCode();
+  // ✅ FIX: retry loop handles the rare race where two requests
+  //    generate the same code simultaneously. Prisma error P2002 =
+  //    unique constraint violation.
+  const MAX_RETRIES = 5;
+  let attempt = 0;
 
-    const patient = await prisma.patient.create({
-      data: {
-        patientCode,
-        name, gender, age: parseInt(age), dob: new Date(dob),
-        address, assignedDoctor,
-        contactNumbers: contactNumbers || [],
-        remarks,
-        treatmentPlan: { create: {} },
-        billing: { create: { estimatedTotal: 0, totalPaid: 0, balanceDue: 0 } }
-      },
-      include: { treatmentPlan: true, billing: true }
-    });
+  while (attempt < MAX_RETRIES) {
+    try {
+      const patientCode = await generatePatientCode();
 
-    res.json(patient);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+      const patient = await prisma.patient.create({
+        data: {
+          patientCode,
+          name,
+          gender,
+          age:            parseInt(age),
+          dob:            new Date(dob),
+          address,
+          assignedDoctor,
+          contactNumbers: contactNumbers || [],
+          remarks,
+          treatmentPlan: { create: {} },
+          billing:       { create: { estimatedTotal: 0, totalPaid: 0, balanceDue: 0 } },
+        },
+        include: { treatmentPlan: true, billing: true },
+      });
+
+      return res.json(patient);
+
+    } catch (err) {
+      // P2002 = unique constraint failure — try again with a fresh code
+      if (err.code === 'P2002' && attempt < MAX_RETRIES - 1) {
+        attempt++;
+        continue;
+      }
+      console.error(err);
+      return res.status(500).json({ error: err.message });
+    }
   }
 });
 
@@ -42,8 +72,8 @@ router.post('/', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const { search } = req.query;
-    // Find IDs of patients whose contactNumbers array contains a partial match
     let contactMatchIds = [];
+
     if (search) {
       const rawMatches = await prisma.$queryRaw`
         SELECT id FROM "Patient"
@@ -58,14 +88,15 @@ router.get('/', async (req, res) => {
     const patients = await prisma.patient.findMany({
       where: search ? {
         OR: [
-          { name: { contains: search, mode: 'insensitive' } },
+          { name:        { contains: search, mode: 'insensitive' } },
           { patientCode: { contains: search, mode: 'insensitive' } },
-          ...(contactMatchIds.length ? [{ id: { in: contactMatchIds } }] : [])
-        ]
+          ...(contactMatchIds.length ? [{ id: { in: contactMatchIds } }] : []),
+        ],
       } : undefined,
-      include: { billing: true },
-      orderBy: { createdAt: 'desc' }
+      include:  { billing: true },
+      orderBy:  { createdAt: 'desc' },
     });
+
     res.json(patients);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -79,10 +110,11 @@ router.get('/:id', async (req, res) => {
       where: { id: req.params.id },
       include: {
         treatmentPlan: { include: { history: { orderBy: { changedAt: 'desc' } } } },
-        billing: { include: { history: { orderBy: { changedAt: 'desc' } } } },
-        visits: { orderBy: { visitDate: 'desc' } }
-      }
+        billing:       { include: { history: { orderBy: { changedAt: 'desc' } } } },
+        visits:        { orderBy: { visitDate: 'desc' } },
+      },
     });
+
     if (!patient) return res.status(404).json({ error: 'Patient not found' });
     res.json(patient);
   } catch (err) {
@@ -91,42 +123,56 @@ router.get('/:id', async (req, res) => {
 });
 
 // DELETE /api/patients/:id — permanently delete patient and all related data
+// ✅ FIX: schema.prisma now has onDelete: Cascade on all relations so
+//    Prisma handles child-record cleanup automatically. This route just
+//    deletes the Patient row and the DB cascades the rest.
+//    (Keep this comment so the next dev understands why it looks simple.)
 router.delete('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-
-    // Must delete in dependency order (no cascade in schema)
-    const treatmentPlan = await prisma.treatmentPlan.findUnique({ where: { patientId: id } });
-    if (treatmentPlan) {
-      await prisma.treatmentHistory.deleteMany({ where: { treatmentPlanId: treatmentPlan.id } });
-      await prisma.treatmentPlan.delete({ where: { patientId: id } });
-    }
-
-    const billing = await prisma.billing.findUnique({ where: { patientId: id } });
-    if (billing) {
-      await prisma.billingHistory.deleteMany({ where: { billingId: billing.id } });
-      await prisma.billing.delete({ where: { patientId: id } });
-    }
-
-    await prisma.visit.deleteMany({ where: { patientId: id } });
-    await prisma.patient.delete({ where: { id } });
-
+    await prisma.patient.delete({ where: { id: req.params.id } });
     res.json({ success: true });
   } catch (err) {
     console.error(err);
+    // P2025 = record not found
+    if (err.code === 'P2025') {
+      return res.status(404).json({ error: 'Patient not found.' });
+    }
     res.status(500).json({ error: err.message });
   }
 });
 
 // PATCH /api/patients/:id — edit patient details
+// ✅ FIX: whitelist the fields that are allowed to be updated.
+//    Previously this passed req.body directly to Prisma, which allowed
+//    any authenticated user to overwrite patientCode, id, isActive, etc.
 router.patch('/:id', async (req, res) => {
   try {
+    const {
+      name, gender, age, dob, address,
+      assignedDoctor, contactNumbers, remarks, isActive,
+    } = req.body;
+
     const patient = await prisma.patient.update({
       where: { id: req.params.id },
-      data: req.body
+      data: {
+        // Only include fields that were actually sent in the request
+        ...(name            !== undefined && { name }),
+        ...(gender          !== undefined && { gender }),
+        ...(age             !== undefined && { age: parseInt(age) }),
+        ...(dob             !== undefined && { dob: new Date(dob) }),
+        ...(address         !== undefined && { address }),
+        ...(assignedDoctor  !== undefined && { assignedDoctor }),
+        ...(contactNumbers  !== undefined && { contactNumbers }),
+        ...(remarks         !== undefined && { remarks }),
+        ...(isActive        !== undefined && { isActive }),
+      },
     });
+
     res.json(patient);
   } catch (err) {
+    if (err.code === 'P2025') {
+      return res.status(404).json({ error: 'Patient not found.' });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -138,23 +184,27 @@ router.patch('/:id/treatment', async (req, res) => {
 
     // Save history snapshot first
     const current = await prisma.treatmentPlan.findUnique({ where: { patientId: req.params.id } });
+    if (!current) return res.status(404).json({ error: 'Treatment plan not found.' });
+
     await prisma.treatmentHistory.create({
       data: {
         treatmentPlanId: current.id,
-        upperRight: current.upperRight,
-        upperLeft: current.upperLeft,
-        lowerRight: current.lowerRight,
-        lowerLeft: current.lowerLeft,
-        general: current.general,
-        comment, changedBy
-      }
+        upperRight:      current.upperRight,
+        upperLeft:       current.upperLeft,
+        lowerRight:      current.lowerRight,
+        lowerLeft:       current.lowerLeft,
+        general:         current.general,
+        comment,
+        changedBy,
+      },
     });
 
     // Update the plan
     const updated = await prisma.treatmentPlan.update({
       where: { patientId: req.params.id },
-      data: { upperRight, upperLeft, lowerRight, lowerLeft, general }
+      data:  { upperRight, upperLeft, lowerRight, lowerLeft, general },
     });
+
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
