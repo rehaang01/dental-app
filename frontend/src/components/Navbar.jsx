@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../context/useAuth'
 
 export default function Navbar() {
   const { user, logout } = useAuth()
@@ -77,7 +77,8 @@ export default function Navbar() {
               className="w-9 h-9 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition text-sm font-bold text-gray-600 dark:text-gray-300"
               title={user?.displayName}
             >
-              {user?.displayName?.[4]?.toUpperCase() ?? '👤'}
+              {/* Pick first letter of the name part after "Dr. " */}
+              {(user?.displayName?.replace(/^Dr\.\s*/i, '')?.[0]?.toUpperCase()) ?? '👤'}
             </button>
 
             {showLogout && (

@@ -49,18 +49,20 @@ router.post('/', async (req, res) => {
       data: { estimatedTotal: newEstimated, totalPaid: newPaid, balanceDue: newBalance }
     });
 
-    // 3. Send WhatsApp message
+    // 3. Send WhatsApp message — only attempted when WhatsApp is enabled
     const patient = await prisma.patient.findUnique({ where: { id: patientId } });
     let whatsappSent = false;
     let whatsappError = null;
 
-    try {
-      const { sendVisitMessage } = require('../services/whatsapp');
-      await sendVisitMessage(patient, visit, newBalance, includeDuesReminder);
-      whatsappSent = true;
-    } catch (waErr) {
-      whatsappError = waErr.message;
-      console.error('⚠️  WhatsApp send failed:', waErr.message); // log to terminal
+    if (process.env.ENABLE_WHATSAPP === 'true') {
+      try {
+        const { sendVisitMessage } = require('../services/whatsapp');
+        await sendVisitMessage(patient, visit, newBalance, includeDuesReminder);
+        whatsappSent = true;
+      } catch (waErr) {
+        whatsappError = waErr.message;
+        console.error('⚠️  WhatsApp send failed:', waErr.message);
+      }
     }
 
     await prisma.visit.update({

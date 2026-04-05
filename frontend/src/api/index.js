@@ -18,5 +18,7 @@ export const updateTreatment = (id, data) => api.patch(`/patients/${id}/treatmen
 export const addVisit      = (data) => api.post('/visits', data);
 export const updateBilling = (patientId, data) => api.patch(`/billing/${patientId}`, data);
 export const deletePatient = (id) => api.delete(`/patients/${id}`);
-export const getDashboard       = () => api.get('/dashboard');
-export const getDashboardDetail = (type) => api.get('/dashboard/detail', { params: { type } });
+export const getDashboard            = () => api.get('/dashboard');
+export const getDashboardDetail      = (type) => api.get('/dashboard/detail', { params: { type } });
+export const deleteTreatmentHistory  = (historyId) => api.delete(`/patients/treatment-history/${historyId}`);
+export const deleteBillingHistory    = (historyId) => api.delete(`/billing/history/${historyId}`);

@@ -24,6 +24,7 @@ async function generatePatientCode() {
 router.post('/', async (req, res) => {
   const {
     name, gender, age, dob, address,
+    country, registrationDate,
     assignedDoctor, contactNumbers, remarks
   } = req.body;
 
@@ -35,6 +36,16 @@ router.post('/', async (req, res) => {
 
   while (attempt < MAX_RETRIES) {
     try {
+      // Basic input validation
+      const parsedAge = parseInt(age);
+      if (isNaN(parsedAge) || parsedAge < 0 || parsedAge > 150) {
+        return res.status(400).json({ error: 'Invalid age value.' });
+      }
+      const parsedDob = new Date(dob);
+      if (isNaN(parsedDob.getTime())) {
+        return res.status(400).json({ error: 'Invalid date of birth.' });
+      }
+
       const patientCode = await generatePatientCode();
 
       const patient = await prisma.patient.create({
@@ -42,11 +53,13 @@ router.post('/', async (req, res) => {
           patientCode,
           name,
           gender,
-          age:            parseInt(age),
-          dob:            new Date(dob),
+          age:              parsedAge,
+          dob:              parsedDob,
+          country:          country || 'India',
+          registrationDate: registrationDate ? new Date(registrationDate) : undefined,
           address,
           assignedDoctor,
-          contactNumbers: contactNumbers || [],
+          contactNumbers:   contactNumbers || [],
           remarks,
           treatmentPlan: { create: {} },
           billing:       { create: { estimatedTotal: 0, totalPaid: 0, balanceDue: 0 } },
@@ -149,22 +162,40 @@ router.patch('/:id', async (req, res) => {
   try {
     const {
       name, gender, age, dob, address,
+      country, registrationDate,
       assignedDoctor, contactNumbers, remarks, isActive,
     } = req.body;
+
+    // Validate age/dob if provided
+    let parsedAge, parsedDob;
+    if (age !== undefined) {
+      parsedAge = parseInt(age);
+      if (isNaN(parsedAge) || parsedAge < 0 || parsedAge > 150) {
+        return res.status(400).json({ error: 'Invalid age value.' });
+      }
+    }
+    if (dob !== undefined) {
+      parsedDob = new Date(dob);
+      if (isNaN(parsedDob.getTime())) {
+        return res.status(400).json({ error: 'Invalid date of birth.' });
+      }
+    }
 
     const patient = await prisma.patient.update({
       where: { id: req.params.id },
       data: {
         // Only include fields that were actually sent in the request
-        ...(name            !== undefined && { name }),
-        ...(gender          !== undefined && { gender }),
-        ...(age             !== undefined && { age: parseInt(age) }),
-        ...(dob             !== undefined && { dob: new Date(dob) }),
-        ...(address         !== undefined && { address }),
-        ...(assignedDoctor  !== undefined && { assignedDoctor }),
-        ...(contactNumbers  !== undefined && { contactNumbers }),
-        ...(remarks         !== undefined && { remarks }),
-        ...(isActive        !== undefined && { isActive }),
+        ...(name             !== undefined && { name }),
+        ...(gender           !== undefined && { gender }),
+        ...(age              !== undefined && { age: parsedAge }),
+        ...(dob              !== undefined && { dob: parsedDob }),
+        ...(country          !== undefined && { country }),
+        ...(registrationDate !== undefined && { registrationDate: new Date(registrationDate) }),
+        ...(address          !== undefined && { address }),
+        ...(assignedDoctor   !== undefined && { assignedDoctor }),
+        ...(contactNumbers   !== undefined && { contactNumbers }),
+        ...(remarks          !== undefined && { remarks }),
+        ...(isActive         !== undefined && { isActive }),
       },
     });
 
@@ -182,24 +213,25 @@ router.patch('/:id/treatment', async (req, res) => {
   try {
     const { upperRight, upperLeft, lowerRight, lowerLeft, general, comment, changedBy } = req.body;
 
-    // Save history snapshot first
     const current = await prisma.treatmentPlan.findUnique({ where: { patientId: req.params.id } });
     if (!current) return res.status(404).json({ error: 'Treatment plan not found.' });
 
+    // Save the NEW values as the history entry so each snapshot shows what was set,
+    // not what was there before (which caused a one-edit lag in the timeline).
     await prisma.treatmentHistory.create({
       data: {
         treatmentPlanId: current.id,
-        upperRight:      current.upperRight,
-        upperLeft:       current.upperLeft,
-        lowerRight:      current.lowerRight,
-        lowerLeft:       current.lowerLeft,
-        general:         current.general,
+        upperRight,
+        upperLeft,
+        lowerRight,
+        lowerLeft,
+        general,
         comment,
         changedBy,
       },
     });
 
-    // Update the plan
+    // Update the live plan
     const updated = await prisma.treatmentPlan.update({
       where: { patientId: req.params.id },
       data:  { upperRight, upperLeft, lowerRight, lowerLeft, general },
@@ -207,6 +239,17 @@ router.patch('/:id/treatment', async (req, res) => {
 
     res.json(updated);
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/patients/treatment-history/:historyId — delete one history snapshot
+router.delete('/treatment-history/:historyId', async (req, res) => {
+  try {
+    await prisma.treatmentHistory.delete({ where: { id: req.params.historyId } });
+    res.json({ success: true });
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'History entry not found.' });
     res.status(500).json({ error: err.message });
   }
 });

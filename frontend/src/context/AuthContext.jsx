@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useState, useEffect } from 'react'
 import { getMe, logout as apiLogout } from '../api'
 
-const AuthContext = createContext(null)
+// Exported so useAuth.js can consume it without circular deps
+export const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null)  // { username, displayName }
@@ -25,10 +26,4 @@ export function AuthProvider({ children }) {
       {children}
     </AuthContext.Provider>
   )
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>')
-  return ctx
 }

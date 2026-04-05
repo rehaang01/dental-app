@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { useAuth } from './context/AuthContext'
+import { useAuth } from './context/useAuth'
 import Login from './pages/Login'
 import PatientList from './pages/PatientList'
 import PatientDetail from './pages/PatientDetail'

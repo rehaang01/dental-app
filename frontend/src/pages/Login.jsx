@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { login as apiLogin } from '../api'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../context/useAuth'
 
 export default function Login() {
   const { setUser } = useAuth()
@@ -92,7 +92,7 @@ export default function Login() {
                 autoFocus
                 value={username}
                 onChange={e => setUsername(e.target.value)}
-                placeholder="vanita / rajneesh"
+                placeholder="Enter your username"
                 className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-sm placeholder-gray-300 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                 required
               />

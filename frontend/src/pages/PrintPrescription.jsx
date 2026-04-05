@@ -74,7 +74,7 @@ export default function PrintPrescription() {
           <div className="rx-clinic-logo">🦷</div>
           <div>
             <h1 className="rx-clinic-name">Goenka's Dental Care Centre</h1>
-            <p className="rx-clinic-sub">Vanita &amp; Rajneesh Goenka · Varanasi, Uttar Pradesh</p>
+            <p className="rx-clinic-sub">Vanita &amp; Rajneesh Goenka · Amritsar, Punjab</p>
           </div>
         </div>
 
@@ -147,7 +147,7 @@ export default function PrintPrescription() {
 
         {/* Footer */}
         <p className="rx-footer">
-          Goenka's Dental Care Centre · Varanasi, Uttar Pradesh
+          Goenka's Dental Care Centre · Amritsar, Punjab
         </p>
       </div>
 

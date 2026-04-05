@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getPatient, updateTreatment, addVisit, updateBilling, updatePatient, deletePatient } from '../api'
+import { getPatient, updateTreatment, addVisit, updateBilling, updatePatient, deletePatient, deleteTreatmentHistory, deleteBillingHistory } from '../api'
+import { useAuth } from '../context/useAuth'
 
 // ─── Shared dark-mode-aware class strings ────────────────────────
 const CARD  = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm"
@@ -75,7 +76,12 @@ export default function PatientDetail() {
                 <span key={i} className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full">{n}</span>
               ))}
             </div>
-            {patient.remarks && <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 italic">"{patient.remarks}"</p>}
+            {patient.remarks && (
+              <div className="mt-2">
+                <span className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">Remarks: </span>
+                <span className="text-sm text-gray-600 dark:text-gray-300">{patient.remarks}</span>
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
             <button
@@ -189,14 +195,23 @@ export default function PatientDetail() {
             {b?.history?.length === 0 ? (
               <p className="text-sm text-gray-400 dark:text-gray-500 italic">No billing changes yet.</p>
             ) : (
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {b?.history?.map((h, i) => (
-                  <div key={i} className="text-xs border-b border-gray-100 dark:border-gray-700 pb-2">
-                    <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                      <span>{new Date(h.changedAt).toLocaleDateString('en-IN')}</span>
-                      <span className="font-medium text-gray-700 dark:text-gray-300">Balance: ₹{h.newBalance.toFixed(2)}</span>
-                    </div>
-                    {h.comment && <p className="text-gray-400 dark:text-gray-500 italic mt-0.5">"{h.comment}"</p>}
+              <div className="space-y-1 max-h-60 overflow-y-auto">
+                {b?.history?.map((h) => (
+                  <div key={h.id} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 text-xs border-b border-gray-100 dark:border-gray-700 py-2 group">
+                    <span className="text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                      {new Date(h.changedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    </span>
+                    <span className="text-gray-500 dark:text-gray-400 truncate">{h.comment || <span className="italic text-gray-300 dark:text-gray-600">—</span>}</span>
+                    <span className="font-semibold text-gray-700 dark:text-gray-200 whitespace-nowrap">₹{h.newBalance.toFixed(2)}</span>
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm('Delete this billing history entry?')) return
+                        try { await deleteBillingHistory(h.id); fetchPatient() }
+                        catch { alert('Failed to delete entry.') }
+                      }}
+                      className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity px-1"
+                      title="Delete this entry"
+                    >🗑</button>
                   </div>
                 ))}
               </div>
@@ -280,6 +295,7 @@ export default function PatientDetail() {
 
 // ─── Visit Modal ─────────────────────────────────────────────────
 function VisitModal({ patient, onClose, onSaved }) {
+  const { user } = useAuth()
   const [form, setForm] = useState({ treatmentDoneToday: '', medicinesInstructions: '', paymentDelta: '', includeDuesReminder: false })
   const [saving, setSaving]   = useState(false)
   const [waStatus, setWaStatus] = useState(null)
@@ -287,7 +303,7 @@ function VisitModal({ patient, onClose, onSaved }) {
   async function handleSave() {
     setSaving(true)
     try {
-      const res = await addVisit({ patientId: patient.id, doctor: patient.assignedDoctor, ...form, changedBy: patient.assignedDoctor })
+      const res = await addVisit({ patientId: patient.id, doctor: patient.assignedDoctor, ...form, changedBy: user?.displayName || patient.assignedDoctor })
       setWaStatus(res.data.whatsappSent ? 'sent' : res.data.whatsappError || 'not sent')
       setTimeout(onSaved, 1500)
     } catch (err) { alert('Error saving visit: ' + err.message) }
@@ -344,10 +360,11 @@ function VisitModal({ patient, onClose, onSaved }) {
 // ─── Treatment Modal ──────────────────────────────────────────────
 function TreatmentModal({ patient, onClose, onSaved }) {
   const tp = patient.treatmentPlan
+  const { user } = useAuth()
   const [form, setForm] = useState({
     upperRight: tp?.upperRight || '', upperLeft: tp?.upperLeft || '',
     lowerRight: tp?.lowerRight || '', lowerLeft: tp?.lowerLeft || '',
-    general: tp?.general || '', comment: '', changedBy: patient.assignedDoctor,
+    general: tp?.general || '', comment: '', changedBy: user?.displayName || patient.assignedDoctor,
   })
   const [saving, setSaving] = useState(false)
 
@@ -446,9 +463,20 @@ function BillingModal({ patient, onClose, onSaved }) {
 }
 
 // ─── Treatment History Modal ──────────────────────────────────────
-function TreatmentHistoryModal({ treatmentPlan, onClose }) {
+function TreatmentHistoryModal({ treatmentPlan, onClose, onDeleted }) {
   const history  = treatmentPlan?.history || []
   const QUADRANTS = [['upperRight','Upper Right'],['upperLeft','Upper Left'],['lowerRight','Lower Right'],['lowerLeft','Lower Left'],['general','General']]
+
+  async function handleDeleteEntry(historyId) {
+    if (!window.confirm('Delete this history snapshot? This cannot be undone.')) return
+    try {
+      await deleteTreatmentHistory(historyId)
+      onDeleted()
+      onClose()
+    } catch {
+      alert('Failed to delete history entry.')
+    }
+  }
 
   return (
     <div className={MODAL_WRAP}>
@@ -471,7 +499,7 @@ function TreatmentHistoryModal({ treatmentPlan, onClose }) {
               <div className="absolute left-3 top-2 bottom-2 w-px bg-gray-200 dark:bg-gray-700" />
               <div className="space-y-6">
                 {history.map(h => (
-                  <div key={h.id} className="relative pl-10">
+                  <div key={h.id} className="relative pl-10 group">
                     <div className="absolute left-0 top-1.5 w-6 h-6 rounded-full bg-white dark:bg-gray-800 border-2 border-blue-400 flex items-center justify-center">
                       <div className="w-2 h-2 rounded-full bg-blue-400" />
                     </div>
@@ -486,12 +514,19 @@ function TreatmentHistoryModal({ treatmentPlan, onClose }) {
                             {new Date(h.changedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
-                        <span className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full font-medium">
-                          Dr. {h.changedBy}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full font-medium">
+                            {h.changedBy}
+                          </span>
+                          <button
+                            onClick={() => handleDeleteEntry(h.id)}
+                            className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity text-xs px-1"
+                            title="Delete this snapshot"
+                          >🗑</button>
+                        </div>
                       </div>
                       {h.comment && (
-                        <p className="text-xs italic text-gray-500 dark:text-gray-400 mb-3 border-l-2 border-blue-200 dark:border-blue-700 pl-2">"{h.comment}"</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 border-l-2 border-blue-200 dark:border-blue-700 pl-2">{h.comment}</p>
                       )}
                       <div className="grid grid-cols-2 gap-2">
                         {QUADRANTS.map(([key, label]) => h[key] ? (
