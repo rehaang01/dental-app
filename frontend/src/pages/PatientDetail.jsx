@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getPatient, updateTreatment, addVisit, updateBilling, updatePatient, deletePatient, deleteTreatmentHistory, deleteBillingHistory } from '../api'
+import { getPatient, updateTreatment, addVisit, updateBilling, updatePatient, deletePatient, deleteTreatmentHistory, deleteBillingHistory, deleteVisit } from '../api'
 import { useAuth } from '../context/useAuth'
 
 // ─── Shared dark-mode-aware class strings ────────────────────────
@@ -10,6 +10,47 @@ const LBL   = "block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1"
 const BTN_CANCEL = "flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2.5 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition"
 const MODAL_WRAP = "fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
 const MODAL_BOX  = "bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full"
+
+// ─── Toast notification ───────────────────────────────────────────
+function Toast({ msg, type, onDone }) {
+  useEffect(() => { const t = setTimeout(onDone, 3000); return () => clearTimeout(t) }, [msg])
+  if (!msg) return null
+  return (
+    <div className={`fixed bottom-6 right-6 z-[999] flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium transition-all
+      ${type === 'error'
+        ? 'bg-red-600 text-white'
+        : 'bg-green-600 text-white'}`}>
+      <span>{type === 'error' ? '✕' : '✓'}</span>
+      <span>{msg}</span>
+      <button onClick={onDone} className="ml-1 opacity-70 hover:opacity-100 text-xs">✕</button>
+    </div>
+  )
+}
+
+// ─── In-app confirm dialog ────────────────────────────────────────
+function ConfirmDialog({ message, onConfirm, onCancel }) {
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[999] p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-9 h-9 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-base">🗑</div>
+          <p className="text-sm text-gray-700 dark:text-gray-200 font-medium">{message}</p>
+        </div>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mb-5">This action cannot be undone.</p>
+        <div className="flex gap-3">
+          <button onClick={onCancel}
+            className="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+            Cancel
+          </button>
+          <button onClick={onConfirm}
+            className="flex-1 bg-red-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition">
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function PatientDetail() {
   const { id } = useParams()
@@ -23,6 +64,10 @@ export default function PatientDetail() {
   const [showBillingEdit, setShowBillingEdit]         = useState(false)
   const [showEditPatient, setShowEditPatient]         = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm]     = useState(false)
+  const [billingDeleteTarget, setBillingDeleteTarget] = useState(null)
+  const [visitDeleteTarget, setVisitDeleteTarget]       = useState(null)
+  const [toast, setToast] = useState({ msg: '', type: 'success' })
+  const showToast = useCallback((msg, type = 'success') => setToast({ msg, type }), [])
 
   useEffect(() => { fetchPatient() }, [id])
 
@@ -89,7 +134,7 @@ export default function PatientDetail() {
                 try {
                   await updatePatient(patient.id, { isActive: !patient.isActive })
                   fetchPatient()
-                } catch (err) { alert('Error: ' + err.message) }
+                } catch (err) { showToast('Error: ' + err.message, 'error') }
               }}
               className={`px-4 py-2.5 rounded-lg font-medium text-sm transition border ${
                 patient.isActive
@@ -204,11 +249,7 @@ export default function PatientDetail() {
                     <span className="text-gray-500 dark:text-gray-400 truncate">{h.comment || <span className="italic text-gray-300 dark:text-gray-600">—</span>}</span>
                     <span className="font-semibold text-gray-700 dark:text-gray-200 whitespace-nowrap">₹{h.newBalance.toFixed(2)}</span>
                     <button
-                      onClick={async () => {
-                        if (!window.confirm('Delete this billing history entry?')) return
-                        try { await deleteBillingHistory(h.id); fetchPatient() }
-                        catch { alert('Failed to delete entry.') }
-                      }}
+                      onClick={() => setBillingDeleteTarget(h.id)}
                       className="text-red-400 hover:text-red-600 transition-colors px-1"
                       title="Delete this entry"
                     >🗑</button>
@@ -262,6 +303,13 @@ export default function PatientDetail() {
                     >
                       🖨 Print
                     </button>
+                    <button
+                      onClick={() => setVisitDeleteTarget(v.id)}
+                      className="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition"
+                      title="Delete this visit"
+                    >
+                      🗑 Delete
+                    </button>
                   </div>
                 </div>
                 {v.treatmentDoneToday && (
@@ -283,18 +331,49 @@ export default function PatientDetail() {
       )}
 
       {/* ── Modals ── */}
-      {showDeleteConfirm  && <DeleteConfirmModal patient={patient} onClose={() => setShowDeleteConfirm(false)} onDeleted={() => navigate('/')} />}
-      {showTreatmentHistory && <TreatmentHistoryModal treatmentPlan={tp} onClose={() => setShowTreatmentHistory(false)} />}
-      {showEditPatient    && <EditPatientModal  patient={patient} onClose={() => setShowEditPatient(false)}    onSaved={() => { setShowEditPatient(false);    fetchPatient() }} />}
-      {showVisitModal     && <VisitModal        patient={patient} onClose={() => setShowVisitModal(false)}     onSaved={() => { setShowVisitModal(false);     fetchPatient() }} />}
-      {showTreatmentEdit  && <TreatmentModal    patient={patient} onClose={() => setShowTreatmentEdit(false)}  onSaved={() => { setShowTreatmentEdit(false);  fetchPatient() }} />}
-      {showBillingEdit    && <BillingModal       patient={patient} onClose={() => setShowBillingEdit(false)}   onSaved={() => { setShowBillingEdit(false);   fetchPatient() }} />}
+      {showDeleteConfirm  && <DeleteConfirmModal patient={patient} onClose={() => setShowDeleteConfirm(false)} onDeleted={() => navigate('/')} showToast={showToast} />}
+      {showTreatmentHistory && <TreatmentHistoryModal treatmentPlan={tp} onClose={() => setShowTreatmentHistory(false)} onDeleted={() => { setShowTreatmentHistory(false); fetchPatient() }} />}
+      {showEditPatient    && <EditPatientModal  patient={patient} onClose={() => setShowEditPatient(false)}    onSaved={() => { setShowEditPatient(false);    fetchPatient() }} showToast={showToast} />}
+      {showVisitModal     && <VisitModal        patient={patient} onClose={() => setShowVisitModal(false)}     onSaved={() => { setShowVisitModal(false);     fetchPatient() }} showToast={showToast} />}
+      {showTreatmentEdit  && <TreatmentModal    patient={patient} onClose={() => setShowTreatmentEdit(false)}  onSaved={() => { setShowTreatmentEdit(false);  fetchPatient() }} showToast={showToast} />}
+      {showBillingEdit    && <BillingModal       patient={patient} onClose={() => setShowBillingEdit(false)}   onSaved={() => { setShowBillingEdit(false);   fetchPatient() }} showToast={showToast} />}
+
+      {/* Billing history delete confirm */}
+      {billingDeleteTarget && (
+        <ConfirmDialog
+          message="Delete this billing history entry?"
+          onCancel={() => setBillingDeleteTarget(null)}
+          onConfirm={async () => {
+            const id = billingDeleteTarget
+            setBillingDeleteTarget(null)
+            try { await deleteBillingHistory(id); fetchPatient() }
+            catch { showToast('Failed to delete billing entry.', 'error') }
+          }}
+        />
+      )}
+
+      {/* Visit delete confirm */}
+      {visitDeleteTarget && (
+        <ConfirmDialog
+          message="Delete this visit? Its billing effect will be reversed."
+          onCancel={() => setVisitDeleteTarget(null)}
+          onConfirm={async () => {
+            const id = visitDeleteTarget
+            setVisitDeleteTarget(null)
+            try { await deleteVisit(id); fetchPatient() }
+            catch { showToast('Failed to delete visit.', 'error') }
+          }}
+        />
+      )}
+
+      {/* Toast */}
+      <Toast msg={toast.msg} type={toast.type} onDone={() => setToast({ msg: '', type: 'success' })} />
     </div>
   )
 }
 
 // ─── Visit Modal ─────────────────────────────────────────────────
-function VisitModal({ patient, onClose, onSaved }) {
+function VisitModal({ patient, onClose, onSaved, showToast }) {
   const { user } = useAuth()
   const [form, setForm] = useState({ treatmentDoneToday: '', medicinesInstructions: '', paymentDelta: '', includeDuesReminder: false })
   const [saving, setSaving]   = useState(false)
@@ -306,7 +385,7 @@ function VisitModal({ patient, onClose, onSaved }) {
       const res = await addVisit({ patientId: patient.id, doctor: patient.assignedDoctor, ...form, changedBy: user?.displayName || patient.assignedDoctor })
       setWaStatus(res.data.whatsappSent ? 'sent' : res.data.whatsappError || 'not sent')
       setTimeout(onSaved, 1500)
-    } catch (err) { alert('Error saving visit: ' + err.message) }
+    } catch (err) { showToast('Error saving visit: ' + err.message, 'error') }
     setSaving(false)
   }
 
@@ -358,7 +437,7 @@ function VisitModal({ patient, onClose, onSaved }) {
 }
 
 // ─── Treatment Modal ──────────────────────────────────────────────
-function TreatmentModal({ patient, onClose, onSaved }) {
+function TreatmentModal({ patient, onClose, onSaved, showToast }) {
   const tp = patient.treatmentPlan
   const { user } = useAuth()
   const [form, setForm] = useState({
@@ -371,7 +450,7 @@ function TreatmentModal({ patient, onClose, onSaved }) {
   async function handleSave() {
     setSaving(true)
     try { await updateTreatment(patient.id, form); onSaved() }
-    catch (err) { alert('Error: ' + err.message) }
+    catch (err) { showToast('Error: ' + err.message, 'error') }
     setSaving(false)
   }
 
@@ -414,7 +493,7 @@ function TreatmentModal({ patient, onClose, onSaved }) {
 }
 
 // ─── Billing Modal ────────────────────────────────────────────────
-function BillingModal({ patient, onClose, onSaved }) {
+function BillingModal({ patient, onClose, onSaved, showToast }) {
   const b = patient.billing
   const [form, setForm] = useState({ estimatedTotal: b?.estimatedTotal || 0, totalPaid: b?.totalPaid || 0, comment: '', changedBy: patient.assignedDoctor })
   const [saving, setSaving] = useState(false)
@@ -422,7 +501,7 @@ function BillingModal({ patient, onClose, onSaved }) {
   async function handleSave() {
     setSaving(true)
     try { await updateBilling(patient.id, form); onSaved() }
-    catch (err) { alert('Error: ' + err.message) }
+    catch (err) { showToast('Error: ' + err.message, 'error') }
     setSaving(false)
   }
 
@@ -466,16 +545,20 @@ function BillingModal({ patient, onClose, onSaved }) {
 function TreatmentHistoryModal({ treatmentPlan, onClose, onDeleted }) {
   const history  = treatmentPlan?.history || []
   const QUADRANTS = [['upperRight','Upper Right'],['upperLeft','Upper Left'],['lowerRight','Lower Right'],['lowerLeft','Lower Left'],['general','General']]
+  const [confirmTarget, setConfirmTarget] = useState(null) // historyId pending delete
+  const [deleting, setDeleting] = useState(false)
 
   async function handleDeleteEntry(historyId) {
-    if (!window.confirm('Delete this history snapshot? This cannot be undone.')) return
+    setDeleting(true)
     try {
       await deleteTreatmentHistory(historyId)
       onDeleted()
-      onClose()
     } catch {
-      alert('Failed to delete history entry.')
+      setConfirmTarget(null)
+      setDeleting(false)
+      // surface error inside modal via a small inline banner — see below
     }
+    setDeleting(false)
   }
 
   return (
@@ -484,78 +567,115 @@ function TreatmentHistoryModal({ treatmentPlan, onClose, onDeleted }) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
           <div>
             <h2 className="text-lg font-semibold text-gray-800 dark:text-white">Treatment Plan History</h2>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{history.length} snapshot{history.length !== 1 ? 's' : ''} saved</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{history.length} previous snapshot{history.length !== 1 ? 's' : ''} · current plan always shown</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl">✕</button>
         </div>
         <div className="overflow-y-auto px-6 py-4 flex-1">
-          {history.length === 0 ? (
-            <div className="text-center py-12 text-gray-400 dark:text-gray-500">
-              <p className="text-3xl mb-2">📋</p>
-              <p className="text-sm">No history yet. Edits will appear here.</p>
-            </div>
-          ) : (
-            <div className="relative">
-              <div className="absolute left-3 top-2 bottom-2 w-px bg-gray-200 dark:bg-gray-700" />
-              <div className="space-y-6">
-                {history.map(h => (
-                  <div key={h.id} className="relative pl-10 group">
-                    <div className="absolute left-0 top-1.5 w-6 h-6 rounded-full bg-white dark:bg-gray-800 border-2 border-blue-400 flex items-center justify-center">
-                      <div className="w-2 h-2 rounded-full bg-blue-400" />
+          <div className="relative">
+            <div className="absolute left-3 top-2 bottom-2 w-px bg-gray-200 dark:bg-gray-700" />
+            <div className="space-y-6">
+
+              {/* ── Current live plan — always pinned at top ── */}
+              <div className="relative pl-10">
+                <div className="absolute left-0 top-1.5 w-6 h-6 rounded-full bg-green-500 border-2 border-green-400 flex items-center justify-center">
+                  <div className="w-2 h-2 rounded-full bg-white" />
+                </div>
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-green-700 dark:text-green-400 uppercase tracking-wide">Current</span>
+                      <span className="text-gray-300 dark:text-gray-600">·</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Live plan</span>
                     </div>
-                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-700 p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                            {new Date(h.changedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                          </span>
-                          <span className="text-gray-300 dark:text-gray-600">·</span>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
-                            {new Date(h.changedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full font-medium">
-                            {h.changedBy}
-                          </span>
-                          <button
-                            onClick={() => handleDeleteEntry(h.id)}
-                            className="text-red-400 hover:text-red-600 transition-colors text-xs px-1"
-                            title="Delete this snapshot"
-                          >🗑</button>
-                        </div>
+                    <span className="text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full font-medium">
+                      Active
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {QUADRANTS.map(([key, label]) => treatmentPlan?.[key] ? (
+                      <div key={key} className="bg-white dark:bg-gray-800 rounded-lg px-3 py-2 border border-green-100 dark:border-green-900">
+                        <p className="text-xs text-gray-400 dark:text-gray-500 font-medium mb-0.5">{label}</p>
+                        <p className="text-xs text-gray-700 dark:text-gray-300">{treatmentPlan[key]}</p>
                       </div>
-                      {h.comment && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 border-l-2 border-blue-200 dark:border-blue-700 pl-2">{h.comment}</p>
+                    ) : null)}
+                    {QUADRANTS.every(([key]) => !treatmentPlan?.[key]) && (
+                      <p className="text-xs text-gray-400 italic col-span-2">Treatment plan is empty.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Past snapshots ── */}
+              {history.length === 0 ? (
+                <div className="pl-10">
+                  <p className="text-xs text-gray-400 dark:text-gray-500 italic">No previous snapshots. History will appear here after each edit.</p>
+                </div>
+              ) : history.map(h => (
+                <div key={h.id} className="relative pl-10 group">
+                  <div className="absolute left-0 top-1.5 w-6 h-6 rounded-full bg-white dark:bg-gray-800 border-2 border-blue-400 flex items-center justify-center">
+                    <div className="w-2 h-2 rounded-full bg-blue-400" />
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-700 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                          {new Date(h.changedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                        <span className="text-gray-300 dark:text-gray-600">·</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {new Date(h.changedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full font-medium">
+                          {h.changedBy}
+                        </span>
+                        <button
+                          onClick={() => setConfirmTarget(h.id)}
+                          className="text-red-400 hover:text-red-600 transition-colors text-xs px-1"
+                          title="Delete this snapshot"
+                        >🗑</button>
+                      </div>
+                    </div>
+                    {h.comment && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 border-l-2 border-blue-200 dark:border-blue-700 pl-2">{h.comment}</p>
+                    )}
+                    <div className="grid grid-cols-2 gap-2">
+                      {QUADRANTS.map(([key, label]) => h[key] ? (
+                        <div key={key} className="bg-white dark:bg-gray-800 rounded-lg px-3 py-2 border border-gray-100 dark:border-gray-600">
+                          <p className="text-xs text-gray-400 dark:text-gray-500 font-medium mb-0.5">{label}</p>
+                          <p className="text-xs text-gray-700 dark:text-gray-300">{h[key]}</p>
+                        </div>
+                      ) : null)}
+                      {QUADRANTS.every(([key]) => !h[key]) && (
+                        <p className="text-xs text-gray-400 italic col-span-2">All fields were empty at this point.</p>
                       )}
-                      <div className="grid grid-cols-2 gap-2">
-                        {QUADRANTS.map(([key, label]) => h[key] ? (
-                          <div key={key} className="bg-white dark:bg-gray-800 rounded-lg px-3 py-2 border border-gray-100 dark:border-gray-600">
-                            <p className="text-xs text-gray-400 dark:text-gray-500 font-medium mb-0.5">{label}</p>
-                            <p className="text-xs text-gray-700 dark:text-gray-300">{h[key]}</p>
-                          </div>
-                        ) : null)}
-                        {QUADRANTS.every(([key]) => !h[key]) && (
-                          <p className="text-xs text-gray-400 italic col-span-2">All fields were empty at this point.</p>
-                        )}
-                      </div>
                     </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          )}
+          </div>
         </div>
         <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700">
           <button onClick={onClose} className={BTN_CANCEL + ' w-full'}>Close</button>
         </div>
       </div>
+
+      {confirmTarget && (
+        <ConfirmDialog
+          message="Delete this treatment plan snapshot?"
+          onCancel={() => setConfirmTarget(null)}
+          onConfirm={() => handleDeleteEntry(confirmTarget)}
+        />
+      )}
     </div>
   )
 }
 
 // ─── Delete Confirm Modal ─────────────────────────────────────────
-function DeleteConfirmModal({ patient, onClose, onDeleted }) {
+function DeleteConfirmModal({ patient, onClose, onDeleted, showToast }) {
   const [confirming, setConfirming] = useState(false)
   const [typedName, setTypedName]   = useState('')
   const [deleting, setDeleting]     = useState(false)
@@ -567,7 +687,7 @@ function DeleteConfirmModal({ patient, onClose, onDeleted }) {
       await deletePatient(patient.id)
       onDeleted()
     } catch (err) {
-      alert('Failed to delete patient: ' + err.message)
+      showToast('Failed to delete patient: ' + err.message, 'error')
       setDeleting(false)
     }
   }
@@ -667,7 +787,7 @@ function PhoneInput({ value, onChange, placeholder }) {
   )
 }
 
-function EditPatientModal({ patient, onClose, onSaved }) {
+function EditPatientModal({ patient, onClose, onSaved, showToast }) {
   const [form, setForm] = useState({
     name: patient.name, gender: patient.gender, age: patient.age,
     dob: new Date(patient.dob).toISOString().split('T')[0],
@@ -689,7 +809,7 @@ function EditPatientModal({ patient, onClose, onSaved }) {
         ...form, age: parseInt(form.age), dob: new Date(form.dob),
         contactNumbers: form.contactNumbers.map(n => n.replace(/\s+/g, '')).filter(n => n.trim())
       }); onSaved()
-    } catch (err) { alert('Error: ' + err.message) }
+    } catch (err) { showToast('Error: ' + err.message, 'error') }
     setSaving(false)
   }
 

@@ -230,16 +230,18 @@ router.patch('/:id/treatment', async (req, res) => {
     const current = await prisma.treatmentPlan.findUnique({ where: { patientId: req.params.id } });
     if (!current) return res.status(404).json({ error: 'Treatment plan not found.' });
 
-    // Save the NEW values as the history entry so each snapshot shows what was set,
-    // not what was there before (which caused a one-edit lag in the timeline).
+    // Save the PREVIOUS (before-state) values as the history snapshot.
+    // Standard audit-log pattern: history = "what it looked like before this edit".
+    // The live plan is always the source of truth.
+    // Deleting a snapshot is therefore always safe — it never affects the current plan.
     await prisma.treatmentHistory.create({
       data: {
         treatmentPlanId: current.id,
-        upperRight,
-        upperLeft,
-        lowerRight,
-        lowerLeft,
-        general,
+        upperRight: current.upperRight,
+        upperLeft:  current.upperLeft,
+        lowerRight: current.lowerRight,
+        lowerLeft:  current.lowerLeft,
+        general:    current.general,
         comment,
         changedBy,
       },

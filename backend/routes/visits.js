@@ -32,10 +32,11 @@ router.post('/', async (req, res) => {
 
     const newBalance = newEstimated - newPaid;
 
-    // Save billing history
+    // Save billing history — link to the visit so we can delete it together
     await prisma.billingHistory.create({
       data: {
         billingId: billing.id,
+        visitId:   visit.id,
         prevEstimated: billing.estimatedTotal,
         prevPaid: billing.totalPaid,
         prevBalance: billing.balanceDue,
@@ -73,6 +74,42 @@ router.post('/', async (req, res) => {
     res.json({ visit, whatsappSent, whatsappError });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/visits/:id — delete a visit and reverse its billing effect
+router.delete('/:id', async (req, res) => {
+  try {
+    const visit = await prisma.visit.findUnique({ where: { id: req.params.id } });
+    if (!visit) return res.status(404).json({ error: 'Visit not found.' });
+
+    const billing = await prisma.billing.findUnique({ where: { patientId: visit.patientId } });
+    if (!billing) return res.status(404).json({ error: 'Billing record not found.' });
+
+    // Reverse the billing effect this visit had when it was created:
+    //   delta > 0 → was added to estimatedTotal, so subtract it back
+    //   delta < 0 → abs(delta) was added to totalPaid, so subtract it back
+    const delta = visit.paymentDelta;
+    const newEstimated = billing.estimatedTotal - (delta > 0 ? delta : 0);
+    const newPaid      = billing.totalPaid      - (delta < 0 ? Math.abs(delta) : 0);
+    const newBalance   = newEstimated - newPaid;
+
+    // Run deletion + billing update + billing history cleanup atomically
+    await prisma.$transaction([
+      // Delete the billing history entry that was created for this visit (if any)
+      prisma.billingHistory.deleteMany({ where: { visitId: req.params.id } }),
+      prisma.visit.delete({ where: { id: req.params.id } }),
+      prisma.billing.update({
+        where: { patientId: visit.patientId },
+        data: { estimatedTotal: newEstimated, totalPaid: newPaid, balanceDue: newBalance },
+      }),
+    ]);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Visit not found.' });
     res.status(500).json({ error: err.message });
   }
 });

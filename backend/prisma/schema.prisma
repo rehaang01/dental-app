@@ -87,6 +87,8 @@ model BillingHistory {
   billingId String
   billing   Billing @relation(fields: [billingId], references: [id], onDelete: Cascade)
 
+  visitId   String?  // links to the Visit that created this entry (null for manual adjustments)
+
   prevEstimated Float
   prevPaid      Float
   prevBalance   Float
